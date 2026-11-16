@@ -20,15 +20,13 @@ struct LoginView: View {
 
                     // Logo & Brand
                     VStack(spacing: 12) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.emerald.opacity(0.15))
-                                .frame(width: 80, height: 80)
-
-                            Image(systemName: "bolt.car.fill")
-                                .font(.system(size: 38, weight: .bold))
-                                .foregroundStyle(Color.emerald)
-                        }
+                        Image("AppLogo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 88, height: 88)
+                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .shadow(color: Color.emerald.opacity(0.35), radius: 12, y: 6)
+                            .accessibilityLabel("Logo ChargeBing")
 
                         Text("ChargeBing")
                             .font(.system(size: 30, weight: .black, design: .rounded))

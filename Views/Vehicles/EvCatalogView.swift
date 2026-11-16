@@ -61,7 +61,7 @@ struct EvCatalogView: View {
                 .padding(.vertical)
             }
             .searchable(text: $viewModel.searchText, prompt: "Cari merk, model, atau tipe...")
-            .navigationTitle("Master Mobil Listrik")
+            .navigationTitle("Kendaraan Listrik")
             .refreshable {
                 await viewModel.fetchModels()
                 await authVM.fetchProfile()

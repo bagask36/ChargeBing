@@ -58,10 +58,39 @@ struct AddSessionSheet: View {
         NavigationStack {
             Form {
                 Section("Lokasi SPKLU") {
-                    Picker("Pilih Stasiun *", selection: $selectedStationId) {
-                        Text("Pilih SPKLU").tag(nil as Int?)
-                        ForEach(availableStations) { st in
-                            Text(st.name).tag(st.id as Int?)
+                    if let st = preselectedStation {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "ev.charger.fill")
+                                .font(.title3)
+                                .foregroundStyle(Color.emerald)
+                                .padding(.top, 2)
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(st.name)
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.primary)
+
+                                if let op = st.operatorName {
+                                    Text(op)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                if let addr = st.address {
+                                    Text(addr)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    } else {
+                        Picker("Pilih Stasiun *", selection: $selectedStationId) {
+                            Text("Pilih SPKLU").tag(nil as Int?)
+                            ForEach(availableStations) { st in
+                                Text(st.name).tag(st.id as Int?)
+                            }
                         }
                     }
 
@@ -190,9 +219,11 @@ struct AddSessionSheet: View {
                 }
             }
             .task {
-                await stationsVM.fetchStations()
-                if let first = stationsVM.stations.first {
-                    selectedStationId = first.id
+                if preselectedStation == nil {
+                    await stationsVM.fetchStations()
+                    if selectedStationId == nil, let first = stationsVM.stations.first {
+                        selectedStationId = first.id
+                    }
                 }
             }
         }

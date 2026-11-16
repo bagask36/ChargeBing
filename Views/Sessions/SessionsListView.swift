@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SessionsListView: View {
     @State private var viewModel = SessionsViewModel()
-    @State private var showAddSheet = false
 
     var body: some View {
         NavigationStack {
@@ -13,7 +12,7 @@ struct SessionsListView: View {
                     ContentUnavailableView(
                         "Belum Ada Sesi Pengisian",
                         systemImage: "bolt.slash.fill",
-                        description: Text("Tekan tombol + di pojok kanan atas untuk mencatat riwayat charging mobil Anda.")
+                        description: Text("Buka tab Peta SPKLU dan pilih stasiun untuk mencatat sesi pengisian mobil Anda.")
                     )
                 } else {
                     List {
@@ -44,27 +43,12 @@ struct SessionsListView: View {
                         Task { await viewModel.fetchSessions() }
                     }
                 }
-
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showAddSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(Color.emerald)
-                    }
-                }
             }
             .refreshable {
                 await viewModel.fetchSessions()
             }
             .task {
                 await viewModel.fetchSessions()
-            }
-            .sheet(isPresented: $showAddSheet) {
-                AddSessionSheet {
-                    Task { await viewModel.fetchSessions() }
-                }
             }
         }
     }
