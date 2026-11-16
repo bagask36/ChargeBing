@@ -184,8 +184,9 @@ struct LoginView: View {
     }
 }
 
-// MARK: - Color Extension for Emerald
+// MARK: - Color Extension for Brand Theme
 extension Color {
     static let emerald = Color(red: 16/255, green: 185/255, blue: 129/255)
+    static let sky = Color(red: 14/255, green: 165/255, blue: 233/255)
 }
 

@@ -4,9 +4,10 @@ struct ChargingCalculatorView: View {
     let car: EvModel
     var onApplyToSession: ((Double, Int, Int, Double) -> Void)? = nil
 
-    @State private var currentSoC: Double = 60.0
-    @State private var targetSoC: Double = 100.0
+    @State private var currentSoC: Double = 20.0
+    @State private var targetSoC: Double = 80.0
     @State private var electricityRate: Double = 2466.0 // Tarif PLN SPKLU per kWh
+    @State private var showCustomRate: Bool = false
 
     // Perhitungan energi yang dibutuhkan
     var deltaPercentage: Double {
@@ -25,77 +26,112 @@ struct ChargingCalculatorView: View {
         kwhNeeded * electricityRate
     }
 
-    // Estimasi durasi (dengan asumsi efisiensi charging 92%)
+    // Estimasi durasi (asumsi efisiensi charging 92%)
     func estimatedDuration(powerKw: Double) -> String {
         guard powerKw > 0 else { return "-" }
         let effectiveKwh = kwhNeeded / 0.92
         let hours = effectiveKwh / powerKw
         let totalMinutes = Int(hours * 60)
 
-        if totalMinutes < 60 {
+        if totalMinutes < 1 {
+            return "< 1 menit"
+        } else if totalMinutes < 60 {
             return "\(totalMinutes) menit"
         } else {
             let h = totalMinutes / 60
             let m = totalMinutes % 60
-            return m > 0 ? "\(h) jam \(m) mnt" : "\(h) jam"
+            return m > 0 ? "\(h)j \(m)m" : "\(h) jam"
         }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 16) {
             // Header
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
+            HStack(alignment: .center) {
+                HStack(spacing: 8) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.emerald.opacity(0.15))
+                            .frame(width: 36, height: 36)
                         Image(systemName: "bolt.badge.clock.fill")
-                            .foregroundStyle(Color.emerald)
-                        Text("KALKULATOR ESTIMASI CHARGING")
-                            .font(.caption2.bold())
+                            .font(.subheadline.bold())
                             .foregroundStyle(Color.emerald)
                     }
 
-                    Text("Estimasi Daya & Kebutuhan kWh")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Kalkulator Pengisian Daya")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        Text("Simulasi kWh, jarak tempuh, & biaya")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Spacer()
 
                 Text("\(String(format: "%.1f", car.batteryCapacityKwh)) kWh")
-                    .font(.caption.bold())
-                    .padding(.horizontal, 8)
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                     .background(Color.emerald.opacity(0.12))
                     .foregroundStyle(Color.emerald)
                     .clipShape(Capsule())
             }
 
-            // Visual Battery Gauge
-            VStack(spacing: 8) {
+            // MARK: - Visual Battery Indicator
+            VStack(spacing: 10) {
                 GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        // Background Bar
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color(uiColor: .systemFill))
-                            .frame(height: 22)
+                    let totalWidth = geo.size.width - 10 // Reserve space for battery terminal
+                    let startRatio = CGFloat(min(100, max(0, currentSoC))) / 100.0
+                    let targetRatio = CGFloat(min(100, max(0, targetSoC))) / 100.0
+                    let currentWidth = totalWidth * startRatio
+                    let addedWidth = max(0, totalWidth * (targetRatio - startRatio))
 
-                        // Delta / To Charge Bar (Yellow/Sky)
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.sky)
-                            .frame(width: max(0, geo.size.width * CGFloat(targetSoC / 100.0)), height: 22)
+                    HStack(spacing: 4) {
+                        // Battery Body Shell
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color.primary.opacity(0.08))
 
-                        // Current Battery Bar (Green)
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.emerald)
-                            .frame(width: max(0, geo.size.width * CGFloat(currentSoC / 100.0)), height: 22)
+                            // Current SoC (Emerald)
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.emerald, Color.emerald.opacity(0.85)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: max(0, currentWidth))
+
+                            // Added SoC (Sky Blue)
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.sky.opacity(0.9), Color.sky.opacity(0.65)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: addedWidth)
+                                .offset(x: currentWidth)
+                        }
+                        .frame(height: 26)
+
+                        // Battery Terminal Tip (+)
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(Color.primary.opacity(0.2))
+                            .frame(width: 5, height: 12)
                     }
                 }
-                .frame(height: 22)
+                .frame(height: 26)
 
+                // Battery Legend & Metrics
                 HStack {
                     HStack(spacing: 4) {
-                        Circle().fill(Color.emerald).frame(width: 8, height: 8)
-                        Text("Saat Ini: \(Int(currentSoC))%")
+                        Circle().fill(Color.emerald).frame(width: 7, height: 7)
+                        Text("Awal: \(Int(currentSoC))%")
                             .font(.caption2.bold())
                             .foregroundStyle(.secondary)
                     }
@@ -103,8 +139,8 @@ struct ChargingCalculatorView: View {
                     Spacer()
 
                     HStack(spacing: 4) {
-                        Circle().fill(Color.sky).frame(width: 8, height: 8)
-                        Text("Akan Diisi: +\(Int(deltaPercentage))%")
+                        Circle().fill(Color.sky).frame(width: 7, height: 7)
+                        Text("Diisi: +\(Int(deltaPercentage))%")
                             .font(.caption2.bold())
                             .foregroundStyle(Color.sky)
                     }
@@ -112,212 +148,263 @@ struct ChargingCalculatorView: View {
                     Spacer()
 
                     HStack(spacing: 4) {
-                        Circle().fill(Color.primary).frame(width: 8, height: 8)
+                        Circle().fill(Color.primary.opacity(0.6)).frame(width: 7, height: 7)
                         Text("Target: \(Int(targetSoC))%")
                             .font(.caption2.bold())
                             .foregroundStyle(.primary)
                     }
                 }
             }
-            .padding(12)
-            .background(Color(uiColor: .systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(14)
+            .background(Color(uiColor: .systemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-            // Slider Controls
+            // MARK: - Sliders & Presets
             VStack(spacing: 14) {
-                // Current Battery Slider
-                VStack(alignment: .leading, spacing: 6) {
+                // Current SoC Slider
+                VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text("Persentase Baterai Saat Ini")
-                            .font(.subheadline.bold())
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
                         Spacer()
                         Text("\(Int(currentSoC))%")
                             .font(.subheadline.bold())
                             .foregroundStyle(Color.emerald)
                     }
 
-                    Slider(value: $currentSoC, in: 0...95, step: 5) {
-                        Text("Baterai Saat Ini")
-                    }
-                    .tint(Color.emerald)
-                    .onChange(of: currentSoC) { _, newVal in
-                        if targetSoC <= newVal {
-                            targetSoC = min(100, newVal + 5)
+                    Slider(value: $currentSoC, in: 0...99, step: 1)
+                        .tint(Color.emerald)
+                        .onChange(of: currentSoC) { _, newVal in
+                            if newVal >= targetSoC {
+                                targetSoC = min(100, newVal + 1)
+                            }
                         }
-                    }
 
-                    // Quick Select Buttons
+                    // Quick Start Presets
                     HStack(spacing: 6) {
-                        ForEach([10, 20, 40, 50, 60, 80], id: \.self) { val in
+                        Text("Preset:")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+
+                        ForEach([10.0, 20.0, 40.0, 60.0], id: \.self) { val in
                             Button {
-                                currentSoC = Double(val)
-                                if targetSoC <= currentSoC {
-                                    targetSoC = min(100, currentSoC + 5)
-                                }
+                                currentSoC = val
+                                if targetSoC <= val { targetSoC = min(100, val + 40) }
                             } label: {
-                                Text("\(val)%")
+                                Text("\(Int(val))%")
                                     .font(.caption2.bold())
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 4)
-                                    .background(currentSoC == Double(val) ? Color.emerald : Color(uiColor: .systemFill))
-                                    .foregroundStyle(currentSoC == Double(val) ? .white : .primary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(currentSoC == val ? Color.emerald : Color.primary.opacity(0.06))
+                                    .foregroundStyle(currentSoC == val ? .white : .primary)
                                     .clipShape(Capsule())
                             }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
 
                 Divider()
 
-                // Target Battery Slider
-                VStack(alignment: .leading, spacing: 6) {
+                // Target SoC Slider
+                VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text("Target Pengisian yang Diinginkan")
-                            .font(.subheadline.bold())
+                        Text("Target Pengisian Baterai")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
                         Spacer()
                         Text("\(Int(targetSoC))%")
                             .font(.subheadline.bold())
                             .foregroundStyle(Color.sky)
                     }
 
-                    Slider(value: $targetSoC, in: min(currentSoC + 1, 100)...100, step: 5) {
-                        Text("Target Pengisian")
-                    }
-                    .tint(Color.sky)
-
-                    // Quick Presets
-                    HStack(spacing: 8) {
-                        Button {
-                            targetSoC = 80
-                        } label: {
-                            Text("80% (Rekomendasi Harian)")
-                                .font(.caption2.bold())
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(targetSoC == 80 ? Color.sky : Color(uiColor: .systemFill))
-                                .foregroundStyle(targetSoC == 80 ? .white : .primary)
-                                .clipShape(Capsule())
+                    Slider(value: $targetSoC, in: 1...100, step: 1)
+                        .tint(Color.sky)
+                        .onChange(of: targetSoC) { _, newVal in
+                            if newVal <= currentSoC {
+                                currentSoC = max(0, newVal - 1)
+                            }
                         }
-                        .disabled(currentSoC >= 80)
 
-                        Button {
-                            targetSoC = 100
-                        } label: {
-                            Text("100% (Penuh / Luar Kota)")
+                    // Quick Target Presets
+                    HStack(spacing: 6) {
+                        Text("Preset:")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+
+                        ForEach([80.0, 90.0, 100.0], id: \.self) { val in
+                            Button {
+                                targetSoC = val
+                                if currentSoC >= val { currentSoC = max(0, val - 40) }
+                            } label: {
+                                HStack(spacing: 3) {
+                                    Text("\(Int(val))%")
+                                    if val == 80.0 {
+                                        Text("(Optimal)")
+                                            .font(.system(size: 9))
+                                    }
+                                }
                                 .font(.caption2.bold())
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(targetSoC == 100 ? Color.sky : Color(uiColor: .systemFill))
-                                .foregroundStyle(targetSoC == 100 ? .white : .primary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(targetSoC == val ? Color.sky : Color.primary.opacity(0.06))
+                                .foregroundStyle(targetSoC == val ? .white : .primary)
                                 .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
             }
-            .padding()
-            .background(Color(uiColor: .secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .padding(14)
+            .background(Color(uiColor: .systemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-            // Main Results Grid
-            VStack(spacing: 12) {
-                HStack(spacing: 12) {
-                    // Result: kWh Needed
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Energi yang Dibutuhkan")
+            // MARK: - Simulation Result Cards (3 Grid Items)
+            HStack(spacing: 10) {
+                // Energi Diperlukan
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "bolt.fill")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
-
-                        Text(String(format: "%.2f kWh", kwhNeeded))
-                            .font(.title2.bold())
                             .foregroundStyle(Color.emerald)
-
-                        Text("+\(Int(deltaPercentage))% dari \(String(format: "%.1f", car.batteryCapacityKwh)) kWh")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.emerald.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.emerald.opacity(0.2), lineWidth: 1)
-                    )
-
-                    // Result: Added Range (km)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Tambahan Jarak Tempuh")
+                        Text("Energi")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-
-                        Text(String(format: "+%.0f km", addedRangeKm))
-                            .font(.title2.bold())
-                            .foregroundStyle(Color.sky)
-
-                        Text("Total Range: \(car.rangeKm) km")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
                     }
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.sky.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.sky.opacity(0.2), lineWidth: 1)
-                    )
+                    Text(String(format: "%.1f", kwhNeeded))
+                        .font(.title3.bold())
+                        .foregroundStyle(Color.emerald)
+                    Text("kWh")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
                 }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.emerald.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.emerald.opacity(0.2), lineWidth: 1)
+                )
 
-                // Estimated Cost & Duration
-                VStack(spacing: 10) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Estimasi Biaya Pengisian")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(Formatters.currency(estimatedCost))
-                                .font(.title3.bold())
-                        }
-
-                        Spacer()
-
-                        Text("Tarif: Rp 2.466/kWh")
+                // Tambahan Jarak Tempuh
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "road.lanes")
                             .font(.caption2)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color(uiColor: .systemFill))
-                            .clipShape(Capsule())
+                            .foregroundStyle(Color.sky)
+                        Text("Jarak")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
+                    Text(String(format: "+%.0f", addedRangeKm))
+                        .font(.title3.bold())
+                        .foregroundStyle(Color.sky)
+                    Text("km range")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.secondary)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.sky.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.sky.opacity(0.2), lineWidth: 1)
+                )
 
-                    Divider()
+                // Estimasi Biaya
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "banknote.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                        Text("Biaya")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(Formatters.currency(estimatedCost))
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Text("@Rp \(Int(electricityRate))/kWh")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                )
+            }
 
-                    // Time Estimation for AC vs DC
-                    HStack(spacing: 20) {
-                        if let maxDc = car.maxDcKw, car.hasDc {
+            // MARK: - Charging Time Estimations (AC vs DC)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Estimasi Waktu Pengisian")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 12) {
+                    // DC Fast Charging
+                    if let maxDc = car.maxDcKw, car.hasDc {
+                        let effectiveDcKw = min(maxDc, 60.0) // Asumsi SPKLU DC 60kW umum
+                        HStack(spacing: 10) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.emerald.opacity(0.15))
+                                    .frame(width: 34, height: 34)
+                                Image(systemName: "bolt.fill")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Color.emerald)
+                            }
+
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("⚡ DC Fast (\(Int(min(maxDc, 50))) kW)")
+                                Text("DC Fast (\(Int(effectiveDcKw)) kW)")
                                     .font(.caption2.bold())
                                     .foregroundStyle(Color.emerald)
-                                Text(estimatedDuration(powerKw: min(maxDc, 50)))
+                                Text(estimatedDuration(powerKw: effectiveDcKw))
                                     .font(.subheadline.bold())
+                                    .foregroundStyle(.primary)
                             }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(Color(uiColor: .systemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+
+                    // AC Normal Charging
+                    let acPower = car.maxAcKw ?? 3.3
+                    HStack(spacing: 10) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.blue.opacity(0.15))
+                                .frame(width: 34, height: 34)
+                            Image(systemName: "powerplug.fill")
+                                .font(.caption.bold())
+                                .foregroundStyle(.blue)
                         }
 
                         VStack(alignment: .leading, spacing: 2) {
-                            let acPower = car.maxAcKw ?? 3.3
-                            Text("🔌 AC Normal (\(String(format: "%.1f", acPower)) kW)")
+                            Text("AC Normal (\(String(format: "%.1f", acPower)) kW)")
                                 .font(.caption2.bold())
-                                .foregroundStyle(Color.sky)
+                                .foregroundStyle(.blue)
                             Text(estimatedDuration(powerKw: acPower))
                                 .font(.subheadline.bold())
+                                .foregroundStyle(.primary)
                         }
-
-                        Spacer()
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(Color(uiColor: .systemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .padding(14)
-                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 14))
             }
 
             // Optional Apply to Session Form Action
@@ -325,9 +412,9 @@ struct ChargingCalculatorView: View {
                 Button {
                     onApply(kwhNeeded, Int(currentSoC), Int(targetSoC), estimatedCost)
                 } label: {
-                    HStack {
+                    HStack(spacing: 6) {
                         Image(systemName: "plus.circle.fill")
-                        Text("Gunakan Estimasi Ini di Sesi Pengisian")
+                        Text("Terapkan ke Catatan Sesi Pengisian")
                     }
                     .font(.subheadline.bold())
                     .frame(maxWidth: .infinity)
@@ -338,15 +425,15 @@ struct ChargingCalculatorView: View {
                 }
             }
         }
-        .padding()
-        .background(Color(uiColor: .systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .shadow(color: .black.opacity(0.04), radius: 8, y: 3)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
     }
 }
-
-// Color Sky helper
-extension Color {
-    static let sky = Color(red: 14/255, green: 165/255, blue: 233/255)
-}
-

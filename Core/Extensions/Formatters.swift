@@ -22,17 +22,16 @@ enum Formatters {
         return String(format: "%.1f km", km)
     }
 
-    static func dateTime(_ isoString: String) -> String {
+    static func parseDate(_ isoString: String) -> Date? {
         let isoFormatter = ISO8601DateFormatter()
         isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        var date = isoFormatter.date(from: isoString)
+        if let d = isoFormatter.date(from: isoString) { return d }
+        isoFormatter.formatOptions = [.withInternetDateTime]
+        return isoFormatter.date(from: isoString)
+    }
 
-        if date == nil {
-            isoFormatter.formatOptions = [.withInternetDateTime]
-            date = isoFormatter.date(from: isoString)
-        }
-
-        guard let validDate = date else { return isoString }
+    static func dateTime(_ isoString: String) -> String {
+        guard let validDate = parseDate(isoString) else { return isoString }
 
         let displayFormatter = DateFormatter()
         displayFormatter.locale = Locale(identifier: "id_ID")
@@ -41,14 +40,31 @@ enum Formatters {
     }
 
     static func relativeTime(_ isoString: String) -> String {
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = isoFormatter.date(from: isoString) else { return isoString }
+        guard let date = parseDate(isoString) else { return isoString }
 
         let formatter = RelativeDateTimeFormatter()
         formatter.locale = Locale(identifier: "id_ID")
         formatter.unitsStyle = .full
         return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    static func duration(from startIso: String, to endIso: String?) -> String? {
+        guard let start = parseDate(startIso),
+              let endStr = endIso,
+              let end = parseDate(endStr) else {
+            return nil
+        }
+        let interval = max(0, end.timeIntervalSince(start))
+        let minutes = Int(interval / 60)
+        if minutes < 1 {
+            return "< 1 mnt"
+        } else if minutes < 60 {
+            return "\(minutes) mnt"
+        } else {
+            let hours = minutes / 60
+            let rem = minutes % 60
+            return rem == 0 ? "\(hours) jam" : "\(hours)j \(rem)m"
+        }
     }
 }
 

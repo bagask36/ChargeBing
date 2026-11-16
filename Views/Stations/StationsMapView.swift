@@ -273,6 +273,8 @@ struct FilterChip: View {
                     Image(systemName: icon)
                 }
                 Text(title)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .font(.caption.bold())
             .padding(.horizontal, 12)

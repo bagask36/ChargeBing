@@ -54,16 +54,25 @@ struct AddSessionSheet: View {
         return stationsVM.stations.first { $0.id == selectedStationId }
     }
 
+    private var isDC: Bool {
+        chargingMode == "DC"
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                Section("Lokasi SPKLU") {
+                // MARK: - Station & Connector Section
+                Section {
                     if let st = preselectedStation {
                         HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: "ev.charger.fill")
-                                .font(.title3)
-                                .foregroundStyle(Color.emerald)
-                                .padding(.top, 2)
+                            ZStack {
+                                Circle()
+                                    .fill(Color.emerald.opacity(0.15))
+                                    .frame(width: 44, height: 44)
+                                Image(systemName: "ev.charger.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.emerald)
+                            }
 
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(st.name)
@@ -72,8 +81,8 @@ struct AddSessionSheet: View {
 
                                 if let op = st.operatorName {
                                     Text(op)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .font(.caption.bold())
+                                        .foregroundStyle(Color.emerald)
                                 }
 
                                 if let addr = st.address {
@@ -86,10 +95,11 @@ struct AddSessionSheet: View {
                         }
                         .padding(.vertical, 4)
                     } else {
-                        Picker("Pilih Stasiun *", selection: $selectedStationId) {
-                            Text("Pilih SPKLU").tag(nil as Int?)
+                        Picker("Stasiun SPKLU *", selection: $selectedStationId) {
+                            Text("Pilih Stasiun SPKLU").tag(nil as Int?)
                             ForEach(availableStations) { st in
-                                Text(st.name).tag(st.id as Int?)
+                                Text("\(st.name)\(st.operatorName != nil ? " (\(st.operatorName!))" : "")")
+                                    .tag(st.id as Int?)
                             }
                         }
                     }
@@ -98,7 +108,8 @@ struct AddSessionSheet: View {
                         Picker("Konektor / Colokan", selection: $selectedConnectorId) {
                             Text("Pilih Konektor (Opsional)").tag(nil as Int?)
                             ForEach(connectors) { conn in
-                                Text("\(conn.currentType) \(conn.plugType) (\(Int(conn.powerKw)) kW)").tag(conn.id as Int?)
+                                Text("\(conn.currentType) \(conn.plugType) · \(Int(conn.powerKw)) kW")
+                                    .tag(conn.id as Int?)
                             }
                         }
                         .onChange(of: selectedConnectorId) { _, newId in
@@ -109,53 +120,73 @@ struct AddSessionSheet: View {
                     }
 
                     Picker("Mode Pengisian *", selection: $chargingMode) {
-                        Text("DC Fast Charging").tag("DC")
-                        Text("AC Normal").tag("AC")
+                        Label("DC Fast", systemImage: "bolt.fill").tag("DC")
+                        Label("AC Normal", systemImage: "powerplug.fill").tag("AC")
                     }
                     .pickerStyle(.segmented)
+                } header: {
+                    Label("Lokasi & Mode SPKLU", systemImage: "mappin.and.ellipse")
                 }
 
-                Section("Waktu Pengisian") {
+                // MARK: - Time Section
+                Section {
                     DatePicker("Waktu Mulai", selection: $startedAt)
                     DatePicker("Waktu Selesai", selection: $endedAt)
+                } header: {
+                    Label("Waktu Pengisian", systemImage: "clock.fill")
                 }
 
-                Section("Konsumsi Daya & Biaya") {
+                // MARK: - Energy & Cost Section
+                Section {
                     HStack {
-                        Text("Energi Terisi (kWh) *")
+                        Label("Energi (kWh) *", systemImage: "bolt.fill")
+                            .foregroundStyle(.primary)
                         Spacer()
-                        TextField("cth: 32.5", text: $kwhText)
+                        TextField("cth: 28.5", text: $kwhText)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .font(.body.bold())
                     }
 
                     HStack {
-                        Text("Total Biaya (Rp)")
+                        Label("Total Biaya (Rp)", systemImage: "banknote.fill")
+                            .foregroundStyle(.primary)
                         Spacer()
-                        TextField("cth: 82500", text: $costText)
+                        TextField("cth: 72000", text: $costText)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
+                            .font(.body.bold())
                     }
+                } header: {
+                    Label("Konsumsi Daya & Biaya", systemImage: "gauge.with.needle.fill")
+                } footer: {
+                    Text("Tarif rata-rata SPKLU di Indonesia berkisar Rp 2.466 per kWh (DC Fast Charging).")
+                        .font(.caption2)
                 }
 
-                Section("Persentase Baterai (SoC)") {
+                // MARK: - Battery (SoC) Section
+                Section {
                     HStack {
-                        Text("SoC Awal (%)")
+                        Label("SoC Awal (%)", systemImage: "battery.25percent")
+                            .foregroundStyle(.primary)
                         Spacer()
-                        TextField("cth: 60", text: $socStartText)
+                        TextField("cth: 20", text: $socStartText)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
+                            .font(.body.bold())
                     }
 
                     HStack {
-                        Text("SoC Akhir (%)")
+                        Label("SoC Akhir (%)", systemImage: "battery.100percent")
+                            .foregroundStyle(.primary)
                         Spacer()
-                        TextField("cth: 100", text: $socEndText)
+                        TextField("cth: 80", text: $socEndText)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
+                            .font(.body.bold())
                     }
 
-                    // Smart Calculation Hint
+                    // Smart Calculation Hint for Connected EV Model
                     if let car = authVM.currentUser?.evModel,
                        let start = Double(socStartText),
                        let end = Double(socEndText),
@@ -164,43 +195,60 @@ struct AddSessionSheet: View {
                         let estimatedKwh = car.batteryCapacityKwh * (delta / 100.0)
                         let estimatedCost = estimatedKwh * 2466.0
 
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Image(systemName: "lightbulb.fill")
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "sparkles")
                                     .foregroundStyle(.yellow)
-                                Text("Estimasi \(car.fullName):")
+                                Text("Estimasi Otomatis (\(car.fullName))")
                                     .font(.caption.bold())
                                     .foregroundStyle(Color.emerald)
                             }
 
                             Text("Kenaikan +\(Int(delta))% membutuhkan sekitar \(String(format: "%.2f", estimatedKwh)) kWh (estimasi biaya Rp \(Int(estimatedCost)))")
-                                .font(.caption2)
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
 
                             Button {
                                 kwhText = String(format: "%.2f", estimatedKwh)
                                 costText = "\(Int(estimatedCost))"
                             } label: {
-                                Text("Terapkan ke Kolom kWh & Biaya")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(Color.emerald)
+                                HStack(spacing: 6) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                    Text("Terapkan ke Kolom kWh & Biaya")
+                                }
+                                .font(.caption.bold())
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.emerald)
+                                .clipShape(Capsule())
                             }
+                            .buttonStyle(.plain)
                             .padding(.top, 2)
                         }
-                        .padding(.vertical, 4)
+                        .padding(.vertical, 6)
                     }
+                } header: {
+                    Label("Status Baterai (SoC)", systemImage: "battery.75percent")
                 }
 
-                Section("Catatan Tambahan") {
-                    TextField("Kondisi charger, antrean, dsb.", text: $notesText, axis: .vertical)
-                        .lineLimit(2...4)
+                // MARK: - Notes Section
+                Section {
+                    TextField("Tulis catatan kondisi stasiun, antrean, atau kecepatan pengisian...", text: $notesText, axis: .vertical)
+                        .lineLimit(3...5)
+                } header: {
+                    Label("Catatan Tambahan (Opsional)", systemImage: "note.text")
                 }
 
                 if let err = errorMessage {
                     Section {
-                        Text(err)
-                            .foregroundStyle(.red)
-                            .font(.caption)
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.red)
+                            Text(err)
+                                .foregroundStyle(.red)
+                                .font(.caption)
+                        }
                     }
                 }
             }
@@ -212,8 +260,17 @@ struct AddSessionSheet: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Simpan") {
+                    Button {
                         saveSession()
+                    } label: {
+                        if isSubmitting {
+                            ProgressView()
+                                .tint(Color.emerald)
+                        } else {
+                            Text("Simpan")
+                                .bold()
+                                .foregroundStyle(Color.emerald)
+                        }
                     }
                     .disabled(isSubmitting || selectedStationId == nil || kwhText.isEmpty)
                 }
@@ -271,4 +328,3 @@ struct AddSessionSheet: View {
         }
     }
 }
-

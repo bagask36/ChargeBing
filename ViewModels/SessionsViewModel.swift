@@ -7,6 +7,19 @@ final class SessionsViewModel {
     var errorMessage: String?
     var modeFilter: String = "ALL" // "ALL", "AC", "DC"
 
+    var totalKwh: Double {
+        sessions.reduce(0) { $0 + $1.kwh }
+    }
+
+    var totalCost: Double {
+        sessions.reduce(0) { $0 + ($1.cost ?? 0) }
+    }
+
+    var averageCostPerKwh: Double? {
+        guard totalKwh > 0, totalCost > 0 else { return nil }
+        return totalCost / totalKwh
+    }
+
     @MainActor
     func fetchSessions() async {
         isLoading = true

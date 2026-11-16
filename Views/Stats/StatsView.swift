@@ -1,269 +1,753 @@
 import SwiftUI
+import Charts
 
 struct StatsView: View {
     @Environment(AuthViewModel.self) private var authVM
     @State private var viewModel = StatsViewModel()
     @State private var showLogoutConfirmation = false
+    @State private var chartMetric: ChartMetricType = .kwh
+
+    enum ChartMetricType: String, CaseIterable, Identifiable {
+        case kwh = "Energi (kWh)"
+        case cost = "Biaya (Rp)"
+
+        var id: String { rawValue }
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    // Profile Header Card
+                    // MARK: - User Profile & Vehicle Header
                     if let user = authVM.currentUser {
-                        HStack(spacing: 14) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.emerald.opacity(0.15))
-                                    .frame(width: 50, height: 50)
-                                Text(user.name.prefix(1).uppercased())
-                                    .font(.title3.bold())
-                                    .foregroundStyle(Color.emerald)
-                            }
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(user.name)
-                                    .font(.headline)
-                                Text(user.email)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-
-                            Button {
-                                showLogoutConfirmation = true
-                            } label: {
-                                Image(systemName: "rectangle.portrait.and.arrow.right")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.red)
-                                    .padding(8)
-                                    .background(Color.red.opacity(0.1))
-                                    .clipShape(Circle())
-                            }
-                        }
-                        .padding()
-                        .background(Color(uiColor: .secondarySystemGroupedBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        UserProfileHeaderCard(
+                            user: user,
+                            onLogoutTapped: { showLogoutConfirmation = true }
+                        )
                         .padding(.horizontal)
                     }
 
                     if viewModel.isLoading && viewModel.stats == nil {
-                        ProgressView("Mengalkulasi statistik...")
-                            .padding(.top, 40)
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .tint(Color.emerald)
+                            Text("Mengalkulasi statistik pengisian...")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 60)
                     } else if let stats = viewModel.stats {
-                        // All-time Metrics Card
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("Akumulasi Sepanjang Waktu")
-                                .font(.headline)
+                        // MARK: - Hero All-Time Metrics
+                        AllTimeMetricsSection(stats: stats.allTime)
+                            .padding(.horizontal)
 
-                            HStack(spacing: 16) {
-                                MetricBox(
-                                    title: "Total Energi",
-                                    value: Formatters.kwh(stats.allTime.totalKwh),
-                                    icon: "bolt.fill",
-                                    color: .emerald
-                                )
-
-                                MetricBox(
-                                    title: "Total Pengeluaran",
-                                    value: Formatters.currency(stats.allTime.totalCost),
-                                    icon: "banknote.fill",
-                                    color: .blue
-                                )
-                            }
-
-                            HStack(spacing: 16) {
-                                MetricBox(
-                                    title: "Total Sesi",
-                                    value: "\(stats.allTime.totalSessions) Kali",
-                                    icon: "repeat",
-                                    color: .orange
-                                )
-
-                                MetricBox(
-                                    title: "Rata-rata/Sesi",
-                                    value: stats.allTime.totalSessions > 0 ? Formatters.kwh(stats.allTime.totalKwh / Double(stats.allTime.totalSessions)) : "0 kWh",
-                                    icon: "gauge.with.dots.needle.50percent",
-                                    color: .purple
-                                )
-                            }
+                        // MARK: - Monthly Trend Chart (if available)
+                        if let monthly = stats.monthly, !monthly.isEmpty {
+                            MonthlyTrendChartCard(
+                                monthly: monthly,
+                                selectedMetric: $chartMetric
+                            )
+                            .padding(.horizontal)
                         }
-                        .padding(.horizontal)
 
-                        // Mode Comparison: AC vs DC
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Perbandingan Mode Pengisian")
-                                .font(.headline)
+                        // MARK: - Mode Comparison (DC vs AC)
+                        ModeComparisonSection(allTime: stats.allTime)
+                            .padding(.horizontal)
 
-                            VStack(spacing: 10) {
-                                ModeComparisonRow(
-                                    modeName: "DC Fast Charging",
-                                    icon: "bolt.fill",
-                                    color: .emerald,
-                                    sessions: stats.allTime.dc.sessions,
-                                    kwh: stats.allTime.dc.kwh,
-                                    cost: stats.allTime.dc.cost,
-                                    totalKwh: stats.allTime.totalKwh
-                                )
+                        // MARK: - Current Month Snapshot
+                        CurrentMonthSnapshotCard(monthStats: stats.currentMonth)
+                            .padding(.horizontal)
 
-                                Divider()
+                        // MARK: - Eco & Fuel Savings Insight
+                        EcoSavingsInsightCard(totalKwh: stats.allTime.totalKwh, totalCost: stats.allTime.totalCost)
+                            .padding(.horizontal)
 
-                                ModeComparisonRow(
-                                    modeName: "AC Normal Charging",
-                                    icon: "powerplug.fill",
-                                    color: .blue,
-                                    sessions: stats.allTime.ac.sessions,
-                                    kwh: stats.allTime.ac.kwh,
-                                    cost: stats.allTime.ac.cost,
-                                    totalKwh: stats.allTime.totalKwh
-                                )
-                            }
-                            .padding()
-                            .background(Color(uiColor: .secondarySystemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                        }
-                        .padding(.horizontal)
-
-                        // Current Month Summary
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Bulan Berjalan (\(stats.currentMonth.month ?? "Bulan Ini"))")
-                                .font(.headline)
-
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Energi Terisi")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    Text(Formatters.kwh(stats.currentMonth.totalKwh))
-                                        .font(.title3.bold())
-                                        .foregroundStyle(Color.emerald)
-                                }
-
-                                Spacer()
-
-                                VStack(alignment: .trailing, spacing: 2) {
-                                    Text("Biaya Pengisian")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    Text(Formatters.currency(stats.currentMonth.totalCost))
-                                        .font(.title3.bold())
-                                }
-                            }
-                            .padding()
-                            .background(Color(uiColor: .secondarySystemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-                        }
-                        .padding(.horizontal)
+                        // MARK: - App & Connection Info
+                        AppInfoSection(onLogoutTapped: { showLogoutConfirmation = true })
+                            .padding(.horizontal)
+                            .padding(.bottom, 24)
                     }
                 }
-                .padding(.vertical)
+                .padding(.vertical, 8)
             }
+            .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Statistik & Akun")
+            .navigationBarTitleDisplayMode(.large)
             .refreshable {
                 await viewModel.fetchStats()
+                await authVM.fetchProfile()
             }
             .task {
                 await viewModel.fetchStats()
             }
-            .confirmationDialog("Logout", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
+            .confirmationDialog("Keluar Akun", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
                 Button("Keluar Akun", role: .destructive) {
                     Task { await authVM.logout() }
                 }
                 Button("Batal", role: .cancel) {}
             } message: {
-                Text("Apakah Anda yakin ingin logout dari aplikasi ChargeBing?")
+                Text("Apakah Anda yakin ingin keluar dari akun ChargeBing?")
             }
         }
     }
 }
 
-// MARK: - Metric Box
-struct MetricBox: View {
+// MARK: - User Profile Header Card
+private struct UserProfileHeaderCard: View {
+    let user: User
+    let onLogoutTapped: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(Color.emerald.opacity(0.15))
+                    .frame(width: 54, height: 54)
+
+                Text(user.name.prefix(1).uppercased())
+                    .font(.title2.bold())
+                    .foregroundStyle(Color.emerald)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(user.name)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+
+                Text(user.email)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let car = user.evModel {
+                    HStack(spacing: 4) {
+                        Image(systemName: "car.side.fill")
+                            .font(.system(size: 10))
+                        Text(car.fullName)
+                            .font(.caption2.bold())
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Color.emerald.opacity(0.12))
+                    .foregroundStyle(Color.emerald)
+                    .clipShape(Capsule())
+                    .padding(.top, 2)
+                }
+            }
+
+            Spacer()
+
+            Button(action: onLogoutTapped) {
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                    .font(.subheadline)
+                    .foregroundStyle(.red)
+                    .padding(10)
+                    .background(Color.red.opacity(0.1))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - All Time Metrics Section
+private struct AllTimeMetricsSection: View {
+    let stats: TimeStats
+
+    var avgKwhPerSession: Double {
+        stats.totalSessions > 0 ? (stats.totalKwh / Double(stats.totalSessions)) : 0
+    }
+
+    var avgCostPerSession: Double {
+        stats.totalSessions > 0 ? (stats.totalCost / Double(stats.totalSessions)) : 0
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Akumulasi Sepanjang Waktu")
+                        .font(.headline)
+                    Text("Total pengisian sejak awal menggunakan aplikasi")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chart.bar.xaxis")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.emerald)
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                StatCard(
+                    title: "Total Energi",
+                    value: Formatters.kwh(stats.totalKwh),
+                    subtitle: "Energi terserap",
+                    icon: "bolt.fill",
+                    tint: Color.emerald
+                )
+
+                StatCard(
+                    title: "Total Biaya",
+                    value: Formatters.currency(stats.totalCost),
+                    subtitle: "Pengeluaran listrik",
+                    icon: "banknote.fill",
+                    tint: .orange
+                )
+
+                StatCard(
+                    title: "Total Sesi",
+                    value: "\(stats.totalSessions) Kali",
+                    subtitle: "Kunjungan SPKLU",
+                    icon: "repeat",
+                    tint: .blue
+                )
+
+                StatCard(
+                    title: "Rata-rata / Sesi",
+                    value: String(format: "%.1f kWh", avgKwhPerSession),
+                    subtitle: Formatters.currency(avgCostPerSession),
+                    icon: "gauge.with.dots.needle.50percent",
+                    tint: .purple
+                )
+            }
+        }
+    }
+}
+
+private struct StatCard: View {
     let title: String
     let value: String
+    let subtitle: String
     let icon: String
-    let color: Color
+    let tint: Color
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon)
-                .font(.subheadline)
-                .foregroundStyle(color)
+            HStack {
+                ZStack {
+                    Circle()
+                        .fill(tint.opacity(0.12))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: icon)
+                        .font(.caption.bold())
+                        .foregroundStyle(tint)
+                }
+                Spacer()
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+
                 Text(value)
                     .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                Text(subtitle)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .shadow(color: Color.black.opacity(0.03), radius: 6, y: 2)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Monthly Trend Chart Card
+private struct MonthChartEntry: Identifiable {
+    var id: String { label }
+    let label: String
+    let value: Double
+}
+
+private struct MonthlyTrendChartCard: View {
+    let monthly: [MonthStats]
+    @Binding var selectedMetric: StatsView.ChartMetricType
+
+    private var chartEntries: [MonthChartEntry] {
+        monthly.compactMap { item in
+            guard let monthStr = item.month else { return nil }
+            let val = selectedMetric == .kwh ? item.totalKwh : item.totalCost
+            return MonthChartEntry(label: monthStr, value: val)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Tren Pengisian Bulanan")
+                        .font(.headline)
+                    Text("Perkembangan konsumsi energi")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Picker("Metrik", selection: $selectedMetric) {
+                    Text("kWh").tag(StatsView.ChartMetricType.kwh)
+                    Text("Rp").tag(StatsView.ChartMetricType.cost)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 130)
+            }
+
+            // Swift Charts Visualizer
+            Chart(chartEntries) { entry in
+                BarMark(
+                    x: .value("Bulan", entry.label),
+                    y: .value(selectedMetric.rawValue, entry.value)
+                )
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: selectedMetric == .kwh
+                            ? [Color.emerald, Color.emerald.opacity(0.7)]
+                            : [Color.orange, Color.orange.opacity(0.7)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .cornerRadius(6)
+            }
+            .frame(height: 180)
+            .chartYAxis {
+                AxisMarks(position: .leading) { value in
+                    AxisGridLine().foregroundStyle(Color.primary.opacity(0.06))
+                    AxisValueLabel {
+                        if let d = value.as(Double.self) {
+                            if selectedMetric == .kwh {
+                                Text("\(Int(d))k")
+                            } else {
+                                Text("\(Int(d / 1000))rb")
+                            }
+                        }
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks { _ in
+                    AxisValueLabel()
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Mode Comparison Section
+private struct ModeComparisonSection: View {
+    let allTime: TimeStats
+
+    var totalKwh: Double {
+        max(1.0, allTime.totalKwh)
+    }
+
+    var dcRatio: Double {
+        allTime.dc.kwh / totalKwh
+    }
+
+    var acRatio: Double {
+        allTime.ac.kwh / totalKwh
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Perbandingan Mode Pengisian")
+                        .font(.headline)
+                    Text("Proporsi penggunaan DC Fast Charging vs AC Normal")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "powerplug.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.blue)
+            }
+
+            // Dual Proportion Bar
+            VStack(spacing: 6) {
+                GeometryReader { geo in
+                    HStack(spacing: 2) {
+                        // DC segment
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.emerald)
+                            .frame(width: max(4, geo.size.width * CGFloat(dcRatio)))
+
+                        // AC segment
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.blue)
+                            .frame(width: max(4, geo.size.width * CGFloat(acRatio)))
+                    }
+                }
+                .frame(height: 12)
+
+                HStack {
+                    HStack(spacing: 4) {
+                        Circle().fill(Color.emerald).frame(width: 8, height: 8)
+                        Text("DC Fast: \(Int(dcRatio * 100))%")
+                            .font(.caption2.bold())
+                            .foregroundStyle(Color.emerald)
+                    }
+
+                    Spacer()
+
+                    HStack(spacing: 4) {
+                        Circle().fill(Color.blue).frame(width: 8, height: 8)
+                        Text("AC Normal: \(Int(acRatio * 100))%")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.blue)
+                    }
+                }
+            }
+            .padding(12)
+            .background(Color(uiColor: .systemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            // Two Cards Side-by-Side
+            HStack(spacing: 12) {
+                ModeDetailCard(
+                    title: "DC Fast Charging",
+                    icon: "bolt.fill",
+                    tint: Color.emerald,
+                    sessions: allTime.dc.sessions,
+                    kwh: allTime.dc.kwh,
+                    cost: allTime.dc.cost
+                )
+
+                ModeDetailCard(
+                    title: "AC Normal",
+                    icon: "powerplug.fill",
+                    tint: .blue,
+                    sessions: allTime.ac.sessions,
+                    kwh: allTime.ac.kwh,
+                    cost: allTime.ac.cost
+                )
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+}
+
+private struct ModeDetailCard: View {
+    let title: String
+    let icon: String
+    let tint: Color
+    let sessions: Int
+    let kwh: Double
+    let cost: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.caption.bold())
+                    .foregroundStyle(tint)
+                Text(title)
+                    .font(.caption.bold())
+                    .foregroundStyle(tint)
+                    .lineLimit(1)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(Formatters.kwh(kwh))
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
+
+                Text(Formatters.currency(cost))
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+
+                Text("\(sessions) sesi tercatat")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .background(Color(uiColor: .systemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
-// MARK: - Mode Comparison Row
-struct ModeComparisonRow: View {
-    let modeName: String
-    let icon: String
-    let color: Color
-    let sessions: Int
-    let kwh: Double
-    let cost: Double
-    let totalKwh: Double
+// MARK: - Current Month Snapshot Card
+private struct CurrentMonthSnapshotCard: View {
+    let monthStats: MonthStats
 
-    var percentage: Double {
-        totalKwh > 0 ? (kwh / totalKwh) : 0
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Bulan Berjalan (\(monthStats.month ?? "Bulan Ini"))")
+                        .font(.headline)
+                    Text("Aktivitas pengisian daya selama bulan berjalan")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Text("\(monthStats.totalSessions) Sesi")
+                    .font(.caption.bold())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color.emerald.opacity(0.12))
+                    .foregroundStyle(Color.emerald)
+                    .clipShape(Capsule())
+            }
+
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Energi Terisi")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(Formatters.kwh(monthStats.totalKwh))
+                        .font(.title3.bold())
+                        .foregroundStyle(Color.emerald)
+                }
+
+                Divider().frame(height: 36)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Biaya Pengisian")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(Formatters.currency(monthStats.totalCost))
+                        .font(.title3.bold())
+                        .foregroundStyle(.primary)
+                }
+
+                Spacer()
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Eco & Fuel Savings Insight Card
+private struct EcoSavingsInsightCard: View {
+    let totalKwh: Double
+    let totalCost: Double
+
+    private var estimatedKmDriven: Double {
+        totalKwh * 6.5
+    }
+
+    private var equivalentFuelCost: Double {
+        estimatedKmDriven * 1400.0
+    }
+
+    private var moneySaved: Double {
+        max(0, equivalentFuelCost - totalCost)
+    }
+
+    private var co2ReducedKg: Double {
+        estimatedKmDriven * 0.120
+    }
+
+    private var moneySavedString: String {
+        Formatters.currency(moneySaved)
+    }
+
+    private var co2ReducedString: String {
+        String(format: "%.0f kg", co2ReducedKg)
+    }
+
+    private var estimatedKmString: String {
+        String(format: "%.0f km", estimatedKmDriven)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                HStack(spacing: 6) {
-                    Image(systemName: icon)
-                        .foregroundStyle(color)
-                    Text(modeName)
-                        .font(.subheadline.bold())
-                }
+        VStack(alignment: .leading, spacing: 14) {
+            headerSection
+            metricsSection
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
 
-                Spacer()
-
-                Text("\(Int(percentage * 100))%")
-                    .font(.caption.bold())
-                    .foregroundStyle(color)
+    private var headerSection: some View {
+        HStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(Color.emerald.opacity(0.15))
+                    .frame(width: 36, height: 36)
+                Image(systemName: "leaf.fill")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(Color.emerald)
             }
 
-            // Progress bar
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color(uiColor: .systemFill))
-                        .frame(height: 6)
-
-                    Capsule()
-                        .fill(color)
-                        .frame(width: geo.size.width * CGFloat(percentage), height: 6)
-                }
-            }
-            .frame(height: 6)
-
-            HStack {
-                Text("\(sessions) Sesi • \(Formatters.kwh(kwh))")
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Estimasi Penghematan & Lingkungan")
+                    .font(.headline)
+                Text("Dibandingkan penggunaan mobil bensin setara")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Text(Formatters.currency(cost))
-                    .font(.caption2.bold())
             }
-            .padding(.top, 2)
+        }
+    }
+
+    private var metricsSection: some View {
+        HStack(spacing: 10) {
+            EcoInsightItem(
+                title: "Hemat Biaya",
+                value: moneySavedString,
+                subtitle: "vs mobil bensin",
+                tint: Color.emerald
+            )
+
+            EcoInsightItem(
+                title: "CO₂ Dicegah",
+                value: co2ReducedString,
+                subtitle: "emisi karbon",
+                tint: Color.sky
+            )
+
+            EcoInsightItem(
+                title: "Jarak Tempuh",
+                value: estimatedKmString,
+                subtitle: "estimasi jarak",
+                tint: .purple
+            )
         }
     }
 }
 
+private struct EcoInsightItem: View {
+    let title: String
+    let value: String
+    let subtitle: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(.subheadline.bold())
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+            Text(subtitle)
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(tint.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+// MARK: - App & Connection Info Section
+private struct AppInfoSection: View {
+    let onLogoutTapped: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            VStack(spacing: 8) {
+                HStack {
+                    Text("Versi Aplikasi")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("1.0.0 (Build 1)")
+                        .font(.subheadline.bold())
+                }
+
+                Divider()
+
+                HStack {
+                    Text("Server Backend")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(Config.baseURL)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .padding(14)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+
+            Button(role: .destructive, action: onLogoutTapped) {
+                HStack(spacing: 8) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                    Text("Keluar dari Akun")
+                }
+                .font(.subheadline.bold())
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color.red.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+            }
+        }
+    }
+}

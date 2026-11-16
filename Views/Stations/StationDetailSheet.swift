@@ -6,6 +6,7 @@ struct StationDetailSheet: View {
     let onToggleFavorite: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var showAddSessionSheet = false
     @State private var selectedConnectorForSession: Connector? = nil
 
@@ -73,10 +74,13 @@ struct StationDetailSheet: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                             }
 
-                            if let googleUrl = URL(string: "comgooglemaps://?daddr=\(station.latitude),\(station.longitude)&directionsmode=driving"),
-                               UIApplication.shared.canOpenURL(googleUrl) {
+                            if let googleUrl = URL(string: "comgooglemaps://?daddr=\(station.latitude),\(station.longitude)&directionsmode=driving") {
                                 Button {
-                                    UIApplication.shared.open(googleUrl)
+                                    openURL(googleUrl) { accepted in
+                                        if !accepted, let webUrl = URL(string: "https://www.google.com/maps/dir/?api=1&destination=\(station.latitude),\(station.longitude)") {
+                                            openURL(webUrl)
+                                        }
+                                    }
                                 } label: {
                                     HStack {
                                         Image(systemName: "map.fill")
@@ -177,8 +181,8 @@ struct StationDetailSheet: View {
     }
 
     private func openMapNavigation(to station: Station) {
-        let placemark = MKPlacemark(coordinate: station.coordinate)
-        let mapItem = MKMapItem(placemark: placemark)
+        let location = CLLocation(latitude: station.latitude, longitude: station.longitude)
+        let mapItem = MKMapItem(location: location, address: nil)
         mapItem.name = station.name
         mapItem.openInMaps(launchOptions: [
             MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
