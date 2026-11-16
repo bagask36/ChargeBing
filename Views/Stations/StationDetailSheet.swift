@@ -6,6 +6,8 @@ struct StationDetailSheet: View {
     let onToggleFavorite: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var showAddSessionSheet = false
+    @State private var selectedConnectorForSession: Connector? = nil
 
     var body: some View {
         NavigationStack {
@@ -53,51 +55,79 @@ struct StationDetailSheet: View {
                     .background(Color(uiColor: .secondarySystemGroupedBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 16))
 
-                    // Quick Actions (Navigate Route)
-                    HStack(spacing: 12) {
+                    // Quick Actions (Navigate Route & Log Session)
+                    VStack(spacing: 10) {
+                        HStack(spacing: 12) {
+                            Button {
+                                openMapNavigation(to: station)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
+                                    Text("Rute Apple Maps")
+                                }
+                                .font(.subheadline.bold())
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.emerald)
+                                .foregroundStyle(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+
+                            if let googleUrl = URL(string: "comgooglemaps://?daddr=\(station.latitude),\(station.longitude)&directionsmode=driving"),
+                               UIApplication.shared.canOpenURL(googleUrl) {
+                                Button {
+                                    UIApplication.shared.open(googleUrl)
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "map.fill")
+                                        Text("Google Maps")
+                                    }
+                                    .font(.subheadline.bold())
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                    .foregroundStyle(.primary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                }
+                            }
+                        }
+
+                        // Catat Sesi Pengisian Button
                         Button {
-                            openMapNavigation(to: station)
+                            selectedConnectorForSession = nil
+                            showAddSessionSheet = true
                         } label: {
                             HStack {
-                                Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
-                                Text("Rute Apple Maps")
+                                Image(systemName: "bolt.badge.plus.fill")
+                                Text("Catat Sesi Charging di Sini")
                             }
                             .font(.subheadline.bold())
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(Color.emerald)
-                            .foregroundStyle(.white)
+                            .padding(.vertical, 13)
+                            .background(Color.emerald.opacity(0.12))
+                            .foregroundStyle(Color.emerald)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-
-                        if let googleUrl = URL(string: "comgooglemaps://?daddr=\(station.latitude),\(station.longitude)&directionsmode=driving"),
-                           UIApplication.shared.canOpenURL(googleUrl) {
-                            Button {
-                                UIApplication.shared.open(googleUrl)
-                            } label: {
-                                HStack {
-                                    Image(systemName: "map.fill")
-                                    Text("Google Maps")
-                                }
-                                .font(.subheadline.bold())
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                .foregroundStyle(.primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                            }
                         }
                     }
 
                     // Available Connectors (Colokan)
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Konektor & Colokan Tersedia")
-                            .font(.headline)
+                        HStack {
+                            Text("Konektor & Colokan Tersedia")
+                                .font(.headline)
+                            Spacer()
+                            Text("Pilih colokan untuk mencatat")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
 
                         if let connectors = station.connectors, !connectors.isEmpty {
                             VStack(spacing: 10) {
                                 ForEach(connectors) { conn in
-                                    ConnectorItemRow(connector: conn)
+                                    ConnectorItemRow(connector: conn) {
+                                        selectedConnectorForSession = conn
+                                        showAddSessionSheet = true
+                                    }
                                 }
                             }
                         } else {
@@ -135,6 +165,14 @@ struct StationDetailSheet: View {
                     Button("Tutup") { dismiss() }
                 }
             }
+            .sheet(isPresented: $showAddSessionSheet) {
+                AddSessionSheet(
+                    preselectedStation: station,
+                    preselectedConnector: selectedConnectorForSession
+                ) {
+                    dismiss()
+                }
+            }
         }
     }
 
@@ -151,6 +189,7 @@ struct StationDetailSheet: View {
 // MARK: - Connector Item Row
 struct ConnectorItemRow: View {
     let connector: Connector
+    var onSelect: (() -> Void)? = nil
 
     var badgeColor: Color {
         switch connector.compatStatus {
@@ -162,40 +201,53 @@ struct ConnectorItemRow: View {
     }
 
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text("\(connector.currentType) \(connector.plugType)")
-                        .font(.subheadline.bold())
+        Button {
+            onSelect?()
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text("\(connector.currentType) \(connector.plugType)")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.primary)
 
-                    Text("\(Int(connector.powerKw)) kW")
-                        .font(.caption.bold())
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color(uiColor: .systemFill))
-                        .clipShape(Capsule())
+                        Text("\(Int(connector.powerKw)) kW")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(uiColor: .systemFill))
+                            .foregroundStyle(.primary)
+                            .clipShape(Capsule())
+                    }
+
+                    if let note = connector.adapterNote, !note.isEmpty {
+                        Text(note)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
-                if let note = connector.adapterNote, !note.isEmpty {
-                    Text(note)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Text(connector.compatStatus.uppercased())
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(badgeColor.opacity(0.15))
+                        .foregroundStyle(badgeColor)
+                        .clipShape(Capsule())
+
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(Color.emerald)
                 }
             }
-
-            Spacer()
-
-            Text(connector.compatStatus.uppercased())
-                .font(.caption2.bold())
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(badgeColor.opacity(0.15))
-                .foregroundStyle(badgeColor)
-                .clipShape(Capsule())
+            .padding()
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
-        .padding()
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .buttonStyle(.plain)
     }
 }
 

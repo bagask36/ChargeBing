@@ -23,10 +23,12 @@ struct StationsMapView: View {
 
                 ForEach(viewModel.stations) { station in
                     Annotation(station.name, coordinate: station.coordinate) {
-                        StationPinMarkerView(station: station)
-                            .onTapGesture {
-                                selectedStationForDetail = station
-                            }
+                        Button {
+                            selectedStationForDetail = station
+                        } label: {
+                            StationPinMarkerView(station: station)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -142,12 +144,52 @@ struct StationsMapView: View {
                     }
                     .padding(.horizontal)
                 }
+
+                // Loading or Error Badge
+                if viewModel.isLoading {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                        Text("Memuat data SPKLU...")
+                            .font(.caption2.bold())
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Material.ultraThickMaterial)
+                    .clipShape(Capsule())
+                    .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
+                } else if let error = viewModel.errorMessage {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                        Text(error)
+                            .font(.caption2)
+                            .lineLimit(1)
+                        Button("Coba Lagi") {
+                            Task { await viewModel.fetchStations(userLocation: locationManager.userLocation) }
+                        }
+                        .font(.caption2.bold())
+                        .foregroundStyle(Color.emerald)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Material.ultraThickMaterial)
+                    .clipShape(Capsule())
+                    .shadow(color: .black.opacity(0.08), radius: 4, y: 2)
+                }
             }
             .padding(.top, 10)
         }
         .task {
             locationManager.requestPermission()
             await viewModel.fetchStations(userLocation: locationManager.userLocation)
+        }
+        .onChange(of: locationManager.userLocation) { _, newLoc in
+            if let loc = newLoc {
+                Task {
+                    await viewModel.fetchStations(userLocation: loc)
+                }
+            }
         }
         .sheet(item: $selectedStationForDetail) { station in
             StationDetailSheet(station: station) {

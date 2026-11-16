@@ -42,8 +42,10 @@ final class APIClient: Sendable {
         urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        print("[APIClient] \(method) \(url.absoluteString) | hasToken: \(KeychainManager.getToken() != nil)")
         if requiresAuth {
             guard let token = KeychainManager.getToken(), !token.isEmpty else {
+                print("[APIClient] ERROR: requiresAuth is true but no token in Keychain!")
                 throw APIError.unauthorized
             }
             urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -70,11 +72,13 @@ final class APIClient: Sendable {
             throw APIError.unknown
         }
 
+        print("[APIClient] Response statusCode: \(httpResponse.statusCode)")
         switch httpResponse.statusCode {
         case 200...299:
             do {
                 return try jsonDecoder.decode(T.self, from: data)
             } catch {
+                print("[APIClient] Decoding error: \(error)")
                 throw APIError.decodingError(error)
             }
 

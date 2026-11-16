@@ -36,6 +36,7 @@ final class StationsViewModel {
             queryItems.append(URLQueryItem(name: "lng", value: String(loc.coordinate.longitude)))
         }
 
+        print("[StationsViewModel] fetchStations called with userLocation: \(String(describing: userLocation?.coordinate))")
         do {
             let response: PaginatedResponse<Station> = try await APIClient.shared.request(
                 path: "/stations",
@@ -43,9 +44,11 @@ final class StationsViewModel {
             )
             self.stations = response.data
             self.isLoading = false
+            print("[StationsViewModel] Fetched \(self.stations.count) stations successfully!")
         } catch {
             self.errorMessage = error.localizedDescription
             self.isLoading = false
+            print("[StationsViewModel] ERROR fetching stations: \(error.localizedDescription)")
         }
     }
 

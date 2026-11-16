@@ -9,9 +9,13 @@ struct EvCatalogView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    // Active Selected Car Banner
+                    // Active Selected Car Banner & Calculator
                     if let activeCar = authVM.currentUser?.evModel {
                         ActiveCarCard(car: activeCar)
+                            .padding(.horizontal)
+
+                        // Charging Calculator
+                        ChargingCalculatorView(car: activeCar)
                             .padding(.horizontal)
                     } else {
                         NoActiveCarCard()

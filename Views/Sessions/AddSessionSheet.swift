@@ -4,12 +4,15 @@ struct AddSessionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AuthViewModel.self) private var authVM
 
+    var preselectedStation: Station? = nil
+    var preselectedConnector: Connector? = nil
     let onSessionSaved: () -> Void
 
     @State private var stationsVM = StationsViewModel()
     @State private var sessionsVM = SessionsViewModel()
 
     @State private var selectedStationId: Int?
+    @State private var selectedConnectorId: Int?
     @State private var chargingMode: String = "DC"
     @State private var startedAt: Date = Date().addingTimeInterval(-45 * 60)
     @State private var endedAt: Date = Date()
@@ -22,14 +25,57 @@ struct AddSessionSheet: View {
     @State private var isSubmitting = false
     @State private var errorMessage: String?
 
+    init(
+        preselectedStation: Station? = nil,
+        preselectedConnector: Connector? = nil,
+        onSessionSaved: @escaping () -> Void = {}
+    ) {
+        self.preselectedStation = preselectedStation
+        self.preselectedConnector = preselectedConnector
+        self.onSessionSaved = onSessionSaved
+        _selectedStationId = State(initialValue: preselectedStation?.id)
+        _selectedConnectorId = State(initialValue: preselectedConnector?.id)
+        if let conn = preselectedConnector {
+            _chargingMode = State(initialValue: conn.currentType.uppercased() == "AC" ? "AC" : "DC")
+        }
+    }
+
+    private var availableStations: [Station] {
+        if let pre = preselectedStation, !stationsVM.stations.contains(where: { $0.id == pre.id }) {
+            return [pre] + stationsVM.stations
+        }
+        return stationsVM.stations
+    }
+
+    private var currentStation: Station? {
+        if let pre = preselectedStation, pre.id == selectedStationId {
+            return pre
+        }
+        return stationsVM.stations.first { $0.id == selectedStationId }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 Section("Lokasi SPKLU") {
                     Picker("Pilih Stasiun *", selection: $selectedStationId) {
                         Text("Pilih SPKLU").tag(nil as Int?)
-                        ForEach(stationsVM.stations) { st in
+                        ForEach(availableStations) { st in
                             Text(st.name).tag(st.id as Int?)
+                        }
+                    }
+
+                    if let connectors = currentStation?.connectors, !connectors.isEmpty {
+                        Picker("Konektor / Colokan", selection: $selectedConnectorId) {
+                            Text("Pilih Konektor (Opsional)").tag(nil as Int?)
+                            ForEach(connectors) { conn in
+                                Text("\(conn.currentType) \(conn.plugType) (\(Int(conn.powerKw)) kW)").tag(conn.id as Int?)
+                            }
+                        }
+                        .onChange(of: selectedConnectorId) { _, newId in
+                            if let conn = connectors.first(where: { $0.id == newId }) {
+                                chargingMode = conn.currentType.uppercased() == "AC" ? "AC" : "DC"
+                            }
                         }
                     }
 
@@ -67,7 +113,7 @@ struct AddSessionSheet: View {
                     HStack {
                         Text("SoC Awal (%)")
                         Spacer()
-                        TextField("cth: 20", text: $socStartText)
+                        TextField("cth: 60", text: $socStartText)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
                     }
@@ -75,9 +121,44 @@ struct AddSessionSheet: View {
                     HStack {
                         Text("SoC Akhir (%)")
                         Spacer()
-                        TextField("cth: 85", text: $socEndText)
+                        TextField("cth: 100", text: $socEndText)
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.trailing)
+                    }
+
+                    // Smart Calculation Hint
+                    if let car = authVM.currentUser?.evModel,
+                       let start = Double(socStartText),
+                       let end = Double(socEndText),
+                       end > start {
+                        let delta = end - start
+                        let estimatedKwh = car.batteryCapacityKwh * (delta / 100.0)
+                        let estimatedCost = estimatedKwh * 2466.0
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Image(systemName: "lightbulb.fill")
+                                    .foregroundStyle(.yellow)
+                                Text("Estimasi \(car.fullName):")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Color.emerald)
+                            }
+
+                            Text("Kenaikan +\(Int(delta))% membutuhkan sekitar \(String(format: "%.2f", estimatedKwh)) kWh (estimasi biaya Rp \(Int(estimatedCost)))")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+
+                            Button {
+                                kwhText = String(format: "%.2f", estimatedKwh)
+                                costText = "\(Int(estimatedCost))"
+                            } label: {
+                                Text("Terapkan ke Kolom kWh & Biaya")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Color.emerald)
+                            }
+                            .padding(.top, 2)
+                        }
+                        .padding(.vertical, 4)
                     }
                 }
 
@@ -137,7 +218,7 @@ struct AddSessionSheet: View {
         Task {
             let success = await sessionsVM.createSession(
                 stationId: stId,
-                connectorId: nil,
+                connectorId: selectedConnectorId,
                 evModelId: authVM.currentUser?.evModelId,
                 chargingMode: chargingMode,
                 startedAt: startedIso,

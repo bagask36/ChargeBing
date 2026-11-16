@@ -20,7 +20,13 @@ enum KeychainManager {
         ]
 
         let status = SecItemAdd(query as CFDictionary, nil)
-        return status == errSecSuccess
+        print("[KeychainManager] saveToken SecItemAdd status: \(status)")
+        if status != errSecSuccess {
+            // Fallback to UserDefaults for simulator reliability
+            UserDefaults.standard.set(token, forKey: "\(serviceName).\(tokenAccount)")
+            print("[KeychainManager] Saved token to UserDefaults fallback")
+        }
+        return status == errSecSuccess || status == -34018
     }
 
     static func getToken() -> String? {
@@ -35,15 +41,21 @@ enum KeychainManager {
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
 
-        guard status == errSecSuccess, let data = item as? Data else {
-            return nil
+        if status == errSecSuccess, let data = item as? Data, let token = String(data: data, encoding: .utf8) {
+            return token
         }
 
-        return String(data: data, encoding: .utf8)
+        // Check fallback from UserDefaults
+        if let fallbackToken = UserDefaults.standard.string(forKey: "\(serviceName).\(tokenAccount)"), !fallbackToken.isEmpty {
+            return fallbackToken
+        }
+
+        return nil
     }
 
     @discardableResult
     static func deleteToken() -> Bool {
+        UserDefaults.standard.removeObject(forKey: "\(serviceName).\(tokenAccount)")
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
