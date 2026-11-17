@@ -4,9 +4,11 @@ struct AddSessionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AuthViewModel.self) private var authVM
 
+    var sessionToEdit: ChargingSession? = nil
     var preselectedStation: Station? = nil
     var preselectedConnector: Connector? = nil
     let onSessionSaved: () -> Void
+    var onSessionUpdated: ((ChargingSession) -> Void)? = nil
 
     @State private var stationsVM = StationsViewModel()
     @State private var sessionsVM = SessionsViewModel()
@@ -25,31 +27,66 @@ struct AddSessionSheet: View {
     @State private var isSubmitting = false
     @State private var errorMessage: String?
 
+    var isEditing: Bool {
+        sessionToEdit != nil
+    }
+
     init(
+        sessionToEdit: ChargingSession? = nil,
         preselectedStation: Station? = nil,
         preselectedConnector: Connector? = nil,
-        onSessionSaved: @escaping () -> Void = {}
+        onSessionSaved: @escaping () -> Void = {},
+        onSessionUpdated: ((ChargingSession) -> Void)? = nil
     ) {
-        self.preselectedStation = preselectedStation
-        self.preselectedConnector = preselectedConnector
+        self.sessionToEdit = sessionToEdit
+        let initialStation = preselectedStation ?? sessionToEdit?.station
+        let initialConnector = preselectedConnector ?? sessionToEdit?.connector
+        self.preselectedStation = initialStation
+        self.preselectedConnector = initialConnector
         self.onSessionSaved = onSessionSaved
-        _selectedStationId = State(initialValue: preselectedStation?.id)
-        _selectedConnectorId = State(initialValue: preselectedConnector?.id)
-        if let conn = preselectedConnector {
+        self.onSessionUpdated = onSessionUpdated
+
+        _selectedStationId = State(initialValue: initialStation?.id ?? sessionToEdit?.stationId)
+        _selectedConnectorId = State(initialValue: initialConnector?.id ?? sessionToEdit?.connectorId)
+
+        if let mode = sessionToEdit?.chargingMode {
+            _chargingMode = State(initialValue: mode)
+        } else if let conn = initialConnector {
             _chargingMode = State(initialValue: conn.currentType.uppercased() == "AC" ? "AC" : "DC")
+        } else {
+            _chargingMode = State(initialValue: "DC")
+        }
+
+        if let session = sessionToEdit {
+            if let startDate = Formatters.parseDate(session.startedAt) {
+                _startedAt = State(initialValue: startDate)
+            }
+            if let ended = session.endedAt, let endDate = Formatters.parseDate(ended) {
+                _endedAt = State(initialValue: endDate)
+            }
+            let kwhStr = session.kwh.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(session.kwh))" : String(format: "%.2f", session.kwh)
+            _kwhText = State(initialValue: kwhStr)
+            _costText = State(initialValue: session.cost != nil ? "\(Int(session.cost!))" : "")
+            _socStartText = State(initialValue: session.socStart != nil ? "\(session.socStart!)" : "")
+            _socEndText = State(initialValue: session.socEnd != nil ? "\(session.socEnd!)" : "")
+            _notesText = State(initialValue: session.notes ?? "")
         }
     }
 
     private var availableStations: [Station] {
-        if let pre = preselectedStation, !stationsVM.stations.contains(where: { $0.id == pre.id }) {
-            return [pre] + stationsVM.stations
+        var list = stationsVM.stations
+        if let pre = preselectedStation ?? sessionToEdit?.station, !list.contains(where: { $0.id == pre.id }) {
+            list.insert(pre, at: 0)
         }
-        return stationsVM.stations
+        return list
     }
 
     private var currentStation: Station? {
         if let pre = preselectedStation, pre.id == selectedStationId {
             return pre
+        }
+        if let st = sessionToEdit?.station, st.id == selectedStationId {
+            return st
         }
         return stationsVM.stations.first { $0.id == selectedStationId }
     }
@@ -252,7 +289,7 @@ struct AddSessionSheet: View {
                     }
                 }
             }
-            .navigationTitle("Catat Sesi Pengisian")
+            .navigationTitle(isEditing ? "Edit Sesi Pengisian" : "Catat Sesi Pengisian")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -267,7 +304,7 @@ struct AddSessionSheet: View {
                             ProgressView()
                                 .tint(Color.emerald)
                         } else {
-                            Text("Simpan")
+                            Text(isEditing ? "Perbarui" : "Simpan")
                                 .bold()
                                 .foregroundStyle(Color.emerald)
                         }
@@ -276,11 +313,13 @@ struct AddSessionSheet: View {
                 }
             }
             .task {
-                if preselectedStation == nil {
+                if preselectedStation == nil && sessionToEdit?.station == nil {
                     await stationsVM.fetchStations()
                     if selectedStationId == nil, let first = stationsVM.stations.first {
                         selectedStationId = first.id
                     }
+                } else if stationsVM.stations.isEmpty {
+                    await stationsVM.fetchStations()
                 }
             }
         }
@@ -304,27 +343,69 @@ struct AddSessionSheet: View {
         let socEnd = Int(socEndText)
 
         Task {
-            let success = await sessionsVM.createSession(
-                stationId: stId,
-                connectorId: selectedConnectorId,
-                evModelId: authVM.currentUser?.evModelId,
-                chargingMode: chargingMode,
-                startedAt: startedIso,
-                endedAt: endedIso,
-                kwh: kwh,
-                cost: cost,
-                socStart: socStart,
-                socEnd: socEnd,
-                notes: notesText.isEmpty ? nil : notesText
-            )
+            if let session = sessionToEdit {
+                let updated = await sessionsVM.updateSession(
+                    id: session.id,
+                    stationId: stId,
+                    connectorId: selectedConnectorId,
+                    evModelId: session.evModelId ?? authVM.currentUser?.evModelId,
+                    chargingMode: chargingMode,
+                    startedAt: startedIso,
+                    endedAt: endedIso,
+                    kwh: kwh,
+                    cost: cost,
+                    socStart: socStart,
+                    socEnd: socEnd,
+                    notes: notesText.isEmpty ? nil : notesText
+                )
 
-            isSubmitting = false
-            if success {
-                onSessionSaved()
-                dismiss()
+                isSubmitting = false
+                if let updated = updated {
+                    onSessionUpdated?(updated)
+                    onSessionSaved()
+                    dismiss()
+                } else {
+                    errorMessage = sessionsVM.errorMessage ?? "Gagal memperbarui sesi pengisian."
+                }
             } else {
-                errorMessage = sessionsVM.errorMessage ?? "Gagal menyimpan sesi pengisian."
+                let success = await sessionsVM.createSession(
+                    stationId: stId,
+                    connectorId: selectedConnectorId,
+                    evModelId: authVM.currentUser?.evModelId,
+                    chargingMode: chargingMode,
+                    startedAt: startedIso,
+                    endedAt: endedIso,
+                    kwh: kwh,
+                    cost: cost,
+                    socStart: socStart,
+                    socEnd: socEnd,
+                    notes: notesText.isEmpty ? nil : notesText
+                )
+
+                isSubmitting = false
+                if success {
+                    onSessionSaved()
+                    dismiss()
+                } else {
+                    errorMessage = sessionsVM.errorMessage ?? "Gagal menyimpan sesi pengisian."
+                }
             }
         }
+    }
+}
+
+// MARK: - Edit Session Sheet Helper
+struct EditSessionSheet: View {
+    let session: ChargingSession
+    var onSessionUpdated: ((ChargingSession) -> Void)? = nil
+
+    var body: some View {
+        AddSessionSheet(
+            sessionToEdit: session,
+            preselectedStation: session.station,
+            preselectedConnector: session.connector,
+            onSessionSaved: {},
+            onSessionUpdated: onSessionUpdated
+        )
     }
 }

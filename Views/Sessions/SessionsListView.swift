@@ -125,6 +125,9 @@ struct SessionsListView: View {
                         selectedSessionForDetail = nil
                         sessionToDelete = session
                         showDeleteConfirmation = true
+                    },
+                    onSessionUpdated: { _ in
+                        Task { await viewModel.fetchSessions() }
                     }
                 )
             }
@@ -684,16 +687,29 @@ private struct SessionsEmptyView: View {
 // MARK: - Session Detail Sheet
 struct SessionDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
-    let session: ChargingSession
+    @State private var currentSession: ChargingSession
     let onDelete: () -> Void
+    var onSessionUpdated: ((ChargingSession) -> Void)? = nil
+
+    @State private var showEditSheet = false
+
+    init(
+        session: ChargingSession,
+        onDelete: @escaping () -> Void,
+        onSessionUpdated: ((ChargingSession) -> Void)? = nil
+    ) {
+        _currentSession = State(initialValue: session)
+        self.onDelete = onDelete
+        self.onSessionUpdated = onSessionUpdated
+    }
 
     var isDC: Bool {
-        session.chargingMode == "DC"
+        currentSession.chargingMode == "DC"
     }
 
     var costPerKwh: Double? {
-        guard let cost = session.cost, session.kwh > 0 else { return nil }
-        return cost / session.kwh
+        guard let cost = currentSession.cost, currentSession.kwh > 0 else { return nil }
+        return cost / currentSession.kwh
     }
 
     var body: some View {
@@ -712,7 +728,7 @@ struct SessionDetailSheet: View {
                                 .foregroundStyle(isDC ? Color.emerald : Color.blue)
                         }
 
-                        Text(session.station?.name ?? "Stasiun SPKLU")
+                        Text(currentSession.station?.name ?? "Stasiun SPKLU")
                             .font(.title2.bold())
                             .multilineTextAlignment(.center)
                             .foregroundStyle(.primary)
@@ -726,7 +742,7 @@ struct SessionDetailSheet: View {
                                 .foregroundStyle(isDC ? Color.emerald : Color.blue)
                                 .clipShape(Capsule())
 
-                            if let op = session.station?.operatorName {
+                            if let op = currentSession.station?.operatorName {
                                 Text(op)
                                     .font(.caption.bold())
                                     .padding(.horizontal, 8)
@@ -737,7 +753,7 @@ struct SessionDetailSheet: View {
                             }
                         }
 
-                        if let address = session.station?.address, !address.isEmpty {
+                        if let address = currentSession.station?.address, !address.isEmpty {
                             Text(address)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -745,7 +761,7 @@ struct SessionDetailSheet: View {
                                 .padding(.horizontal)
                         }
 
-                        if let station = session.station {
+                        if let station = currentSession.station {
                             Button {
                                 openMapNavigation(to: station)
                             } label: {
@@ -777,14 +793,14 @@ struct SessionDetailSheet: View {
                         VStack(spacing: 12) {
                             DetailInfoRow(
                                 title: "Energi Terisi",
-                                value: Formatters.kwh(session.kwh),
+                                value: Formatters.kwh(currentSession.kwh),
                                 icon: "bolt.badge.checkmark.fill",
                                 tint: Color.emerald
                             )
 
                             DetailInfoRow(
                                 title: "Total Biaya",
-                                value: Formatters.currency(session.cost),
+                                value: Formatters.currency(currentSession.cost),
                                 icon: "banknote.fill",
                                 tint: .orange
                             )
@@ -798,7 +814,7 @@ struct SessionDetailSheet: View {
                                 )
                             }
 
-                            if let duration = Formatters.duration(from: session.startedAt, to: session.endedAt) {
+                            if let duration = Formatters.duration(from: currentSession.startedAt, to: currentSession.endedAt) {
                                 DetailInfoRow(
                                     title: "Estimasi Durasi",
                                     value: duration,
@@ -809,12 +825,12 @@ struct SessionDetailSheet: View {
 
                             DetailInfoRow(
                                 title: "Waktu Mulai",
-                                value: Formatters.dateTime(session.startedAt),
+                                value: Formatters.dateTime(currentSession.startedAt),
                                 icon: "calendar",
                                 tint: .secondary
                             )
 
-                            if let ended = session.endedAt {
+                            if let ended = currentSession.endedAt {
                                 DetailInfoRow(
                                     title: "Waktu Selesai",
                                     value: Formatters.dateTime(ended),
@@ -830,7 +846,7 @@ struct SessionDetailSheet: View {
                     .padding(.horizontal)
 
                     // Battery SoC Card (if available)
-                    if let start = session.socStart, let end = session.socEnd {
+                    if let start = currentSession.socStart, let end = currentSession.socEnd {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Status Baterai (SoC)")
                                 .font(.headline)
@@ -854,12 +870,12 @@ struct SessionDetailSheet: View {
                     }
 
                     // Vehicle & Connector Info Card
-                    if session.evModel != nil || session.connector != nil {
+                    if currentSession.evModel != nil || currentSession.connector != nil {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Kendaraan & Spesifikasi Colokan")
                                 .font(.headline)
 
-                            if let car = session.evModel {
+                            if let car = currentSession.evModel {
                                 DetailInfoRow(
                                     title: "Mobil Listrik",
                                     value: car.fullName,
@@ -874,7 +890,7 @@ struct SessionDetailSheet: View {
                                 )
                             }
 
-                            if let conn = session.connector {
+                            if let conn = currentSession.connector {
                                 DetailInfoRow(
                                     title: "Tipe Colokan",
                                     value: "\(conn.currentType) \(conn.plugType)",
@@ -896,7 +912,7 @@ struct SessionDetailSheet: View {
                     }
 
                     // Notes (if any)
-                    if let notes = session.notes, !notes.isEmpty {
+                    if let notes = currentSession.notes, !notes.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Catatan Pengguna")
                                 .font(.headline)
@@ -912,18 +928,35 @@ struct SessionDetailSheet: View {
                         .padding(.horizontal)
                     }
 
-                    // Delete Action Button
-                    Button(role: .destructive, action: onDelete) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "trash")
-                            Text("Hapus Riwayat Sesi Ini")
+                    // Action Buttons (Edit & Delete)
+                    VStack(spacing: 12) {
+                        Button {
+                            showEditSheet = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "square.and.pencil")
+                                Text("Edit Sesi Pengisian")
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.emerald)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
                         }
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.red)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.red.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                        Button(role: .destructive, action: onDelete) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "trash")
+                                Text("Hapus Riwayat Sesi Ini")
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.red.opacity(0.1))
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
                     }
                     .padding(.horizontal)
                     .padding(.top, 8)
@@ -935,9 +968,28 @@ struct SessionDetailSheet: View {
             .navigationTitle("Detail Sesi")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showEditSheet = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "pencil")
+                            Text("Edit")
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundStyle(Color.emerald)
+                    }
+                }
+
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Tutup") { dismiss() }
                         .font(.subheadline.bold())
+                }
+            }
+            .sheet(isPresented: $showEditSheet) {
+                EditSessionSheet(session: currentSession) { updated in
+                    currentSession = updated
+                    onSessionUpdated?(updated)
                 }
             }
         }

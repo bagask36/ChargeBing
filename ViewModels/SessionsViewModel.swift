@@ -101,6 +101,66 @@ final class SessionsViewModel {
     }
 
     @MainActor
+    func updateSession(
+        id: Int,
+        stationId: Int,
+        connectorId: Int?,
+        evModelId: Int?,
+        chargingMode: String,
+        startedAt: String,
+        endedAt: String?,
+        kwh: Double,
+        cost: Double?,
+        socStart: Int?,
+        socEnd: Int?,
+        notes: String?
+    ) async -> ChargingSession? {
+        struct UpdateSessionPayload: Encodable {
+            let station_id: Int
+            let connector_id: Int?
+            let ev_model_id: Int?
+            let charging_mode: String
+            let started_at: String
+            let ended_at: String?
+            let kwh: Double
+            let cost: Double?
+            let soc_start: Int?
+            let soc_end: Int?
+            let notes: String?
+        }
+
+        do {
+            let payload = UpdateSessionPayload(
+                station_id: stationId,
+                connector_id: connectorId,
+                ev_model_id: evModelId,
+                charging_mode: chargingMode,
+                started_at: startedAt,
+                ended_at: endedAt,
+                kwh: kwh,
+                cost: cost,
+                soc_start: socStart,
+                soc_end: socEnd,
+                notes: notes
+            )
+
+            let response: APIResponse<ChargingSession> = try await APIClient.shared.request(
+                path: "/charging-sessions/\(id)",
+                method: "PUT",
+                body: payload
+            )
+
+            if let idx = sessions.firstIndex(where: { $0.id == id }) {
+                sessions[idx] = response.data
+            }
+            return response.data
+        } catch {
+            self.errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    @MainActor
     func deleteSession(id: Int) async -> Bool {
         struct MessageResponse: Decodable {
             let message: String
