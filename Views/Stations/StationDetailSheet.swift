@@ -15,15 +15,25 @@ struct StationDetailSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     // Header Card
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 10) {
                         HStack(alignment: .top) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(station.name)
                                     .font(.title3.bold())
 
-                                Text(station.operatorName ?? "Operator Mandiri")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                HStack(spacing: 8) {
+                                    Text(station.operatorName ?? "Operator Mandiri")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+
+                                    Text(station.gbtStatus.title)
+                                        .font(.caption2.bold())
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(Color.emerald.opacity(0.12))
+                                        .foregroundStyle(Color.emerald)
+                                        .clipShape(Capsule())
+                                }
                             }
 
                             Spacer()
@@ -37,12 +47,19 @@ struct StationDetailSheet: View {
                             }
                         }
 
-                        Text(station.address ?? "Alamat tidak tersedia")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "mappin.and.ellipse")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 2)
+
+                            Text(station.address ?? "Alamat tidak tersedia")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
 
                         if let dist = station.distanceKm {
-                            HStack(spacing: 4) {
+                            HStack(spacing: 5) {
                                 Image(systemName: "location.fill")
                                 Text("Jarak: \(Formatters.distance(dist)) dari posisi mobil Anda")
                             }
@@ -56,92 +73,125 @@ struct StationDetailSheet: View {
                     .background(Color(uiColor: .secondarySystemGroupedBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 16))
 
-                    // Quick Actions (Navigate Route & Log Session)
+                    // Primary Actions Bar (Petunjuk Arah & Catat Sesi)
                     VStack(spacing: 10) {
-                        HStack(spacing: 12) {
-                            Button {
-                                openMapNavigation(to: station)
+                        HStack(spacing: 10) {
+                            // Menu Navigasi Peta (Apple Maps / Google Maps)
+                            Menu {
+                                Button {
+                                    openMapNavigation(to: station)
+                                } label: {
+                                    Label("Apple Maps", systemImage: "map")
+                                }
+
+                                if let googleUrl = URL(string: "comgooglemaps://?daddr=\(station.latitude),\(station.longitude)&directionsmode=driving") {
+                                    Button {
+                                        openURL(googleUrl) { accepted in
+                                            if !accepted, let webUrl = URL(string: "https://www.google.com/maps/dir/?api=1&destination=\(station.latitude),\(station.longitude)") {
+                                                openURL(webUrl)
+                                            }
+                                        }
+                                    } label: {
+                                        Label("Google Maps", systemImage: "arrow.triangle.turn.up.right.diamond")
+                                    }
+                                }
                             } label: {
-                                HStack {
+                                HStack(spacing: 6) {
                                     Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
-                                    Text("Rute Apple Maps")
+                                    Text("Petunjuk Arah")
+                                    Image(systemName: "chevron.down")
+                                        .font(.caption2.bold())
                                 }
                                 .font(.subheadline.bold())
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
+                                .padding(.vertical, 13)
                                 .background(Color.emerald)
                                 .foregroundStyle(.white)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                             }
 
-                            if let googleUrl = URL(string: "comgooglemaps://?daddr=\(station.latitude),\(station.longitude)&directionsmode=driving") {
-                                Button {
-                                    openURL(googleUrl) { accepted in
-                                        if !accepted, let webUrl = URL(string: "https://www.google.com/maps/dir/?api=1&destination=\(station.latitude),\(station.longitude)") {
-                                            openURL(webUrl)
-                                        }
-                                    }
-                                } label: {
-                                    HStack {
-                                        Image(systemName: "map.fill")
-                                        Text("Google Maps")
-                                    }
-                                    .font(.subheadline.bold())
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 12)
-                                    .background(Color(uiColor: .secondarySystemGroupedBackground))
-                                    .foregroundStyle(.primary)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            // Catat Sesi Pengisian Button
+                            Button {
+                                selectedConnectorForSession = nil
+                                showAddSessionSheet = true
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "bolt.badge.plus.fill")
+                                    Text("Catat Sesi")
                                 }
+                                .font(.subheadline.bold())
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 13)
+                                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                .foregroundStyle(.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                )
                             }
                         }
 
-                        // Tombol Buka Aplikasi Operator Charging (PLN Mobile, Voltron, Terra Charge, E-Charge, dsb.)
+                        // Kartu Aplikasi Charging Resmi (PLN Mobile, Voltron, Terra Charge, E-Charge)
                         if let app = station.resolvedChargingApp {
                             Button {
                                 openChargingApp(app)
                             } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "bolt.horizontal.circle.fill")
-                                        .font(.headline)
-                                    Text("Buka di \(app.name)")
-                                        .font(.subheadline.bold())
-                                    Spacer()
-                                    HStack(spacing: 4) {
-                                        Text("Buka App")
-                                            .font(.caption2.bold())
-                                        Image(systemName: "arrow.up.forward.app.fill")
-                                            .font(.caption)
+                                HStack(spacing: 12) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(Color.emerald.opacity(0.12))
+                                            .frame(width: 42, height: 42)
+
+                                        Image(systemName: "bolt.fill")
+                                            .font(.headline)
+                                            .foregroundStyle(Color.emerald)
                                     }
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.white.opacity(0.2))
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 6) {
+                                            Text("Aplikasi Pengisian")
+                                                .font(.caption2.bold())
+                                                .foregroundStyle(.secondary)
+                                                .textCase(.uppercase)
+
+                                            Circle()
+                                                .fill(Color.emerald)
+                                                .frame(width: 4, height: 4)
+
+                                            Text("Scan & Bayar")
+                                                .font(.caption2)
+                                                .foregroundStyle(Color.emerald)
+                                        }
+
+                                        Text(app.name)
+                                            .font(.subheadline.bold())
+                                            .foregroundStyle(.primary)
+                                    }
+
+                                    Spacer()
+
+                                    HStack(spacing: 4) {
+                                        Text("Buka")
+                                            .font(.caption.bold())
+                                        Image(systemName: "arrow.up.forward.app.fill")
+                                            .font(.caption2)
+                                    }
+                                    .foregroundStyle(Color.emerald)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 7)
+                                    .background(Color.emerald.opacity(0.12))
                                     .clipShape(Capsule())
                                 }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .frame(maxWidth: .infinity)
-                                .background(Color.blue)
-                                .foregroundStyle(.white)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .padding(12)
+                                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Color.emerald.opacity(0.25), lineWidth: 1)
+                                )
                             }
-                        }
-
-                        // Catat Sesi Pengisian Button
-                        Button {
-                            selectedConnectorForSession = nil
-                            showAddSessionSheet = true
-                        } label: {
-                            HStack {
-                                Image(systemName: "bolt.badge.plus.fill")
-                                Text("Catat Sesi Charging di Sini")
-                            }
-                            .font(.subheadline.bold())
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 13)
-                            .background(Color.emerald.opacity(0.12))
-                            .foregroundStyle(Color.emerald)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .buttonStyle(.plain)
                         }
                     }
 
@@ -178,10 +228,6 @@ struct StationDetailSheet: View {
                             .font(.headline)
 
                         VStack(spacing: 10) {
-                            if let chargingApp = station.resolvedChargingApp {
-                                InfoRow(icon: "iphone.gen3", title: "Aplikasi Charging", value: chargingApp.name)
-                                Divider()
-                            }
                             InfoRow(icon: "clock.fill", title: "Jam Buka", value: station.openingHours ?? "24 Jam")
                             Divider()
                             InfoRow(icon: "tag.fill", title: "Estimasi Biaya", value: station.pricingNote ?? "Tarif standar PLN / Operator")
