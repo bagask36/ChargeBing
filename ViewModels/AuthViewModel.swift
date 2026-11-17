@@ -118,6 +118,55 @@ final class AuthViewModel {
     }
 
     @MainActor
+    func updateProfile(
+        name: String,
+        email: String,
+        password: String? = nil,
+        evModelId: Int? = nil
+    ) async -> (success: Bool, message: String?) {
+        isLoading = true
+        errorMessage = nil
+
+        struct UpdateProfilePayload: Encodable {
+            let name: String
+            let email: String
+            let password: String?
+            let ev_model_id: Int?
+        }
+
+        do {
+            let trimmedPwd = password?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let pwdToSend = (trimmedPwd?.isEmpty ?? true) ? nil : trimmedPwd
+
+            let payload = UpdateProfilePayload(
+                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                password: pwdToSend,
+                ev_model_id: evModelId
+            )
+
+            let response: UserProfileResponse = try await APIClient.shared.request(
+                path: "/me",
+                method: "PUT",
+                body: payload
+            )
+
+            self.currentUser = response.user
+            Self.saveUserLocally(response.user)
+            self.isLoading = false
+            return (true, nil)
+        } catch let error as APIError {
+            self.isLoading = false
+            self.errorMessage = error.localizedDescription
+            return (false, error.localizedDescription)
+        } catch {
+            self.isLoading = false
+            self.errorMessage = error.localizedDescription
+            return (false, error.localizedDescription)
+        }
+    }
+
+    @MainActor
     func logout() async {
         struct EmptyResponse: Decodable {}
         _ = try? await APIClient.shared.request(path: "/auth/logout", method: "POST") as EmptyResponse

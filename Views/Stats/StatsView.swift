@@ -5,6 +5,7 @@ struct StatsView: View {
     @Environment(AuthViewModel.self) private var authVM
     @State private var viewModel = StatsViewModel()
     @State private var showLogoutConfirmation = false
+    @State private var showEditProfileSheet = false
     @State private var chartMetric: ChartMetricType = .kwh
 
     enum ChartMetricType: String, CaseIterable, Identifiable {
@@ -22,6 +23,7 @@ struct StatsView: View {
                     if let user = authVM.currentUser {
                         UserProfileHeaderCard(
                             user: user,
+                            onEditTapped: { showEditProfileSheet = true },
                             onLogoutTapped: { showLogoutConfirmation = true }
                         )
                         .padding(.horizontal)
@@ -64,7 +66,10 @@ struct StatsView: View {
                             .padding(.horizontal)
 
                         // MARK: - App & Connection Info
-                        AppInfoSection(onLogoutTapped: { showLogoutConfirmation = true })
+                        AppInfoSection(
+                            onEditProfileTapped: { showEditProfileSheet = true },
+                            onLogoutTapped: { showLogoutConfirmation = true }
+                        )
                             .padding(.horizontal)
                             .padding(.bottom, 24)
                     }
@@ -89,6 +94,9 @@ struct StatsView: View {
             } message: {
                 Text("Apakah Anda yakin ingin keluar dari akun ChargeBing?")
             }
+            .sheet(isPresented: $showEditProfileSheet) {
+                EditProfileSheet()
+            }
         }
     }
 }
@@ -96,56 +104,80 @@ struct StatsView: View {
 // MARK: - User Profile Header Card
 private struct UserProfileHeaderCard: View {
     let user: User
+    let onEditTapped: () -> Void
     let onLogoutTapped: () -> Void
 
     var body: some View {
         HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(Color.emerald.opacity(0.15))
-                    .frame(width: 54, height: 54)
+            Button(action: onEditTapped) {
+                HStack(spacing: 14) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.emerald.opacity(0.15))
+                            .frame(width: 54, height: 54)
 
-                Text(user.name.prefix(1).uppercased())
-                    .font(.title2.bold())
-                    .foregroundStyle(Color.emerald)
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(user.name)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-
-                Text(user.email)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if let car = user.evModel {
-                    HStack(spacing: 4) {
-                        Image(systemName: "car.side.fill")
-                            .font(.system(size: 10))
-                        Text(car.fullName)
-                            .font(.caption2.bold())
+                        Text(user.name.prefix(1).uppercased())
+                            .font(.title2.bold())
+                            .foregroundStyle(Color.emerald)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(Color.emerald.opacity(0.12))
-                    .foregroundStyle(Color.emerald)
-                    .clipShape(Capsule())
-                    .padding(.top, 2)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Text(user.name)
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+
+                            Image(systemName: "pencil.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(Color.emerald)
+                        }
+
+                        Text(user.email)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        if let car = user.evModel {
+                            HStack(spacing: 4) {
+                                Image(systemName: "car.side.fill")
+                                    .font(.system(size: 10))
+                                Text(car.fullName)
+                                    .font(.caption2.bold())
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2)
+                            .background(Color.emerald.opacity(0.12))
+                            .foregroundStyle(Color.emerald)
+                            .clipShape(Capsule())
+                            .padding(.top, 2)
+                        }
+                    }
                 }
             }
+            .buttonStyle(.plain)
 
             Spacer()
 
-            Button(action: onLogoutTapped) {
-                Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.subheadline)
-                    .foregroundStyle(.red)
-                    .padding(10)
-                    .background(Color.red.opacity(0.1))
-                    .clipShape(Circle())
+            HStack(spacing: 8) {
+                Button(action: onEditTapped) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(Color.emerald)
+                        .padding(10)
+                        .background(Color.emerald.opacity(0.12))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onLogoutTapped) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.subheadline)
+                        .foregroundStyle(.red)
+                        .padding(10)
+                        .background(Color.red.opacity(0.1))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
         .padding(16)
         .background(
@@ -705,11 +737,28 @@ private struct EcoInsightItem: View {
 
 // MARK: - App & Connection Info Section
 private struct AppInfoSection: View {
+    let onEditProfileTapped: () -> Void
     let onLogoutTapped: () -> Void
 
     var body: some View {
         VStack(spacing: 12) {
             VStack(spacing: 8) {
+                Button(action: onEditProfileTapped) {
+                    HStack {
+                        Label("Edit Profil Akun", systemImage: "person.crop.circle.badge.pencil")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+
+                Divider()
+
                 HStack {
                     Text("Versi Aplikasi")
                         .font(.subheadline)
