@@ -22,6 +22,16 @@
     <string>1</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>plnmobile</string>
+        <string>voltron</string>
+        <string>echarge</string>
+        <string>echargeinternational</string>
+        <string>terracharge</string>
+        <string>terra-charge</string>
+        <string>comgooglemaps</string>
+    </array>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>ChargeBing membutuhkan lokasi Anda untuk menampilkan jarak dan rute ke stasiun SPKLU terdekat.</string>
     <key>NSAppTransportSecurity</key>

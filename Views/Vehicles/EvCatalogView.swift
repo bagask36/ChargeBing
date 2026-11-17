@@ -149,6 +149,9 @@ struct EvCatalogView: View {
             }
             .task {
                 await viewModel.fetchModels()
+                if authVM.currentUser == nil || authVM.currentUser?.evModel == nil {
+                    await authVM.fetchProfile()
+                }
             }
             .sheet(item: $selectedCarForDetail) { car in
                 EvModelDetailSheet(

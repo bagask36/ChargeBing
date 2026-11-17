@@ -96,6 +96,37 @@ struct StationDetailSheet: View {
                             }
                         }
 
+                        // Tombol Buka Aplikasi Operator Charging (PLN Mobile, Voltron, Terra Charge, E-Charge, dsb.)
+                        if let app = station.resolvedChargingApp {
+                            Button {
+                                openChargingApp(app)
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "bolt.horizontal.circle.fill")
+                                        .font(.headline)
+                                    Text("Buka di \(app.name)")
+                                        .font(.subheadline.bold())
+                                    Spacer()
+                                    HStack(spacing: 4) {
+                                        Text("Buka App")
+                                            .font(.caption2.bold())
+                                        Image(systemName: "arrow.up.forward.app.fill")
+                                            .font(.caption)
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.white.opacity(0.2))
+                                    .clipShape(Capsule())
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .frame(maxWidth: .infinity)
+                                .background(Color.blue)
+                                .foregroundStyle(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                        }
+
                         // Catat Sesi Pengisian Button
                         Button {
                             selectedConnectorForSession = nil
@@ -147,6 +178,10 @@ struct StationDetailSheet: View {
                             .font(.headline)
 
                         VStack(spacing: 10) {
+                            if let chargingApp = station.resolvedChargingApp {
+                                InfoRow(icon: "iphone.gen3", title: "Aplikasi Charging", value: chargingApp.name)
+                                Divider()
+                            }
                             InfoRow(icon: "clock.fill", title: "Jam Buka", value: station.openingHours ?? "24 Jam")
                             Divider()
                             InfoRow(icon: "tag.fill", title: "Estimasi Biaya", value: station.pricingNote ?? "Tarif standar PLN / Operator")
@@ -187,6 +222,20 @@ struct StationDetailSheet: View {
         mapItem.openInMaps(launchOptions: [
             MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
         ])
+    }
+
+    private func openChargingApp(_ app: ChargingApp) {
+        if let schemeStr = app.schemeUrl,
+           let schemeUrl = URL(string: schemeStr),
+           UIApplication.shared.canOpenURL(schemeUrl) {
+            UIApplication.shared.open(schemeUrl)
+        } else if let storeStr = app.appStoreUrl,
+                  let storeUrl = URL(string: storeStr) {
+            UIApplication.shared.open(storeUrl)
+        } else if let schemeStr = app.schemeUrl,
+                  let schemeUrl = URL(string: schemeStr) {
+            UIApplication.shared.open(schemeUrl)
+        }
     }
 }
 

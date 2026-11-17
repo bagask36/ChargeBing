@@ -2,6 +2,8 @@ import Foundation
 
 @Observable
 final class AuthViewModel {
+    private static let userDefaultsUserKey = "chargebing_cached_user"
+
     var currentUser: User?
     var isAuthenticated: Bool = false
     var isLoading: Bool = false
@@ -11,15 +13,32 @@ final class AuthViewModel {
         checkAuthStatus()
     }
 
+    private static func saveUserLocally(_ user: User) {
+        if let data = try? JSONEncoder().encode(user) {
+            UserDefaults.standard.set(data, forKey: userDefaultsUserKey)
+        }
+    }
+
+    private static func loadUserLocally() -> User? {
+        guard let data = UserDefaults.standard.data(forKey: userDefaultsUserKey) else { return nil }
+        return try? JSONDecoder().decode(User.self, from: data)
+    }
+
+    private static func clearUserLocally() {
+        UserDefaults.standard.removeObject(forKey: userDefaultsUserKey)
+    }
+
     func checkAuthStatus() {
         if let token = KeychainManager.getToken(), !token.isEmpty {
             isAuthenticated = true
+            currentUser = Self.loadUserLocally()
             Task {
                 await fetchProfile()
             }
         } else {
             isAuthenticated = false
             currentUser = nil
+            Self.clearUserLocally()
         }
     }
 
@@ -45,6 +64,7 @@ final class AuthViewModel {
 
             KeychainManager.saveToken(response.token)
             currentUser = response.user
+            Self.saveUserLocally(response.user)
             isAuthenticated = true
             isLoading = false
             return true
@@ -64,11 +84,13 @@ final class AuthViewModel {
         do {
             let response: UserProfileResponse = try await APIClient.shared.request(path: "/me")
             self.currentUser = response.user
+            Self.saveUserLocally(response.user)
             self.isAuthenticated = true
         } catch {
             if case APIError.unauthorized = error {
                 self.isAuthenticated = false
                 self.currentUser = nil
+                Self.clearUserLocally()
             }
         }
     }
@@ -87,6 +109,7 @@ final class AuthViewModel {
                 body: payload
             )
             self.currentUser = response.user
+            Self.saveUserLocally(response.user)
             return true
         } catch {
             self.errorMessage = error.localizedDescription
@@ -99,6 +122,7 @@ final class AuthViewModel {
         struct EmptyResponse: Decodable {}
         _ = try? await APIClient.shared.request(path: "/auth/logout", method: "POST") as EmptyResponse
         KeychainManager.deleteToken()
+        Self.clearUserLocally()
         currentUser = nil
         isAuthenticated = false
     }

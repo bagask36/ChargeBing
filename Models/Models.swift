@@ -44,7 +44,7 @@ struct UserProfileResponse: Decodable {
     let user: User
 }
 
-struct User: Identifiable, Decodable, Sendable {
+struct User: Identifiable, Codable, Sendable {
     let id: Int
     let name: String
     let email: String
@@ -59,7 +59,7 @@ struct User: Identifiable, Decodable, Sendable {
 }
 
 // MARK: - Master EV Model (Mobil Listrik)
-struct EvModel: Identifiable, Decodable, Hashable, Sendable {
+struct EvModel: Identifiable, Codable, Hashable, Sendable {
     let id: Int
     let brand: String
     let modelName: String
@@ -92,6 +92,74 @@ struct EvModel: Identifiable, Decodable, Hashable, Sendable {
     }
 }
 
+// MARK: - Master Charging App (Aplikasi Operator SPKLU)
+struct ChargingApp: Identifiable, Decodable, Hashable, Sendable {
+    let id: Int?
+    let name: String
+    let schemeUrl: String?
+    let appStoreUrl: String?
+    let playStoreUrl: String?
+    let iconUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name
+        case schemeUrl = "scheme_url"
+        case appStoreUrl = "app_store_url"
+        case playStoreUrl = "play_store_url"
+        case iconUrl = "icon_url"
+    }
+}
+
+struct ChargingAppMaster {
+    static let plnMobile = ChargingApp(
+        id: 1,
+        name: "PLN Mobile",
+        schemeUrl: "plnmobile://",
+        appStoreUrl: "https://apps.apple.com/id/app/pln-mobile/id1296796967",
+        playStoreUrl: "https://play.google.com/store/apps/details?id=com.icon.pln123",
+        iconUrl: nil
+    )
+
+    static let voltron = ChargingApp(
+        id: 2,
+        name: "Voltron",
+        schemeUrl: "voltron://",
+        appStoreUrl: "https://apps.apple.com/id/app/voltron-charging-network/id1661633596",
+        playStoreUrl: "https://play.google.com/store/apps/details?id=com.voltron.ev",
+        iconUrl: nil
+    )
+
+    static let eCharge = ChargingApp(
+        id: 3,
+        name: "E Charge International",
+        schemeUrl: "echarge://",
+        appStoreUrl: "https://apps.apple.com/id/app/e-charge-international/id1666838321",
+        playStoreUrl: "https://play.google.com/store/apps/details?id=com.echarge.international",
+        iconUrl: nil
+    )
+
+    static let terraCharge = ChargingApp(
+        id: 4,
+        name: "Terra Charge",
+        schemeUrl: "terracharge://",
+        appStoreUrl: "https://apps.apple.com/id/app/terra-charge/id6444062492",
+        playStoreUrl: "https://play.google.com/store/apps/details?id=jp.co.terramotors.terracharge",
+        iconUrl: nil
+    )
+
+    static let allMasters: [ChargingApp] = [plnMobile, voltron, eCharge, terraCharge]
+
+    /// Pencocokan cerdas jika backend hanya mengirimkan nama operator / stasiun
+    static func match(by text: String?) -> ChargingApp? {
+        guard let raw = text?.lowercased() else { return nil }
+        if raw.contains("pln") { return plnMobile }
+        if raw.contains("voltron") { return voltron }
+        if raw.contains("e charge") || raw.contains("echarge") || raw.contains("e-charge") { return eCharge }
+        if raw.contains("terra") { return terraCharge }
+        return nil
+    }
+}
+
 // MARK: - Station (SPKLU)
 struct Station: Identifiable, Decodable, Hashable, Sendable {
     let id: Int
@@ -107,6 +175,12 @@ struct Station: Identifiable, Decodable, Hashable, Sendable {
     let distanceKm: Double?
     let connectors: [Connector]?
 
+    // Mastering aplikasi charging dari backend
+    let chargingApp: ChargingApp?
+    let appName: String?
+    let appSchemeUrl: String?
+    let appStoreUrl: String?
+
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
@@ -119,6 +193,31 @@ struct Station: Identifiable, Decodable, Hashable, Sendable {
         case isFavorite = "is_favorite"
         case distanceKm = "distance_km"
         case connectors
+        case chargingApp = "charging_app"
+        case appName = "app_name"
+        case appSchemeUrl = "app_scheme_url"
+        case appStoreUrl = "app_store_url"
+    }
+
+    /// Mengambil konfigurasi aplikasi charging:
+    /// 1. Prioritas utama: Object `charging_app` dari backend
+    /// 2. Prioritas kedua: Direct field `app_scheme_url` / `app_name`
+    /// 3. Fallback: Cocokkan otomatis dari nama operator atau nama stasiun ke master charging apps
+    var resolvedChargingApp: ChargingApp? {
+        if let app = chargingApp {
+            return app
+        }
+        if let scheme = appSchemeUrl, !scheme.isEmpty {
+            return ChargingApp(
+                id: nil,
+                name: appName ?? operatorName ?? "Aplikasi Charging",
+                schemeUrl: scheme,
+                appStoreUrl: appStoreUrl,
+                playStoreUrl: nil,
+                iconUrl: nil
+            )
+        }
+        return ChargingAppMaster.match(by: operatorName) ?? ChargingAppMaster.match(by: name)
     }
 
     // GB/T Pin Color Logic
