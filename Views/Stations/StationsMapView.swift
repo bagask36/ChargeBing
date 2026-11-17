@@ -49,14 +49,10 @@ struct StationsMapView: View {
                             .foregroundStyle(.secondary)
 
                         TextField("Cari SPKLU / Alamat...", text: $viewModel.searchText)
-                            .onSubmit {
-                                Task { await viewModel.fetchStations(userLocation: locationManager.userLocation) }
-                            }
 
                         if !viewModel.searchText.isEmpty {
                             Button {
                                 viewModel.searchText = ""
-                                Task { await viewModel.fetchStations(userLocation: locationManager.userLocation) }
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundStyle(.secondary)
@@ -68,6 +64,30 @@ struct StationsMapView: View {
                     .background(Material.ultraThickMaterial)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+
+                    // Refresh Button (Muat Data Ulang)
+                    Button {
+                        Task {
+                            await viewModel.fetchStations(userLocation: locationManager.userLocation, forceRefresh: true)
+                        }
+                    } label: {
+                        Group {
+                            if viewModel.isLoading {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                    .tint(Color.emerald)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundStyle(Color.emerald)
+                            }
+                        }
+                        .frame(width: 44, height: 44)
+                        .background(Material.ultraThickMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+                    }
+                    .disabled(viewModel.isLoading)
 
                     // Recenter on GPS Location
                     Button {
@@ -117,7 +137,6 @@ struct StationsMapView: View {
                             isSelected: viewModel.usableOnly
                         ) {
                             viewModel.usableOnly.toggle()
-                            Task { await viewModel.fetchStations(userLocation: locationManager.userLocation) }
                         }
 
                         FilterChip(
@@ -125,7 +144,6 @@ struct StationsMapView: View {
                             isSelected: viewModel.filterCurrentType == "ALL"
                         ) {
                             viewModel.filterCurrentType = "ALL"
-                            Task { await viewModel.fetchStations(userLocation: locationManager.userLocation) }
                         }
 
                         FilterChip(
@@ -134,7 +152,6 @@ struct StationsMapView: View {
                             isSelected: viewModel.filterCurrentType == "DC"
                         ) {
                             viewModel.filterCurrentType = "DC"
-                            Task { await viewModel.fetchStations(userLocation: locationManager.userLocation) }
                         }
 
                         FilterChip(
@@ -142,7 +159,6 @@ struct StationsMapView: View {
                             isSelected: viewModel.filterCurrentType == "AC"
                         ) {
                             viewModel.filterCurrentType = "AC"
-                            Task { await viewModel.fetchStations(userLocation: locationManager.userLocation) }
                         }
                     }
                     .padding(.horizontal)
@@ -169,7 +185,7 @@ struct StationsMapView: View {
                             .font(.caption2)
                             .lineLimit(1)
                         Button("Coba Lagi") {
-                            Task { await viewModel.fetchStations(userLocation: locationManager.userLocation) }
+                            Task { await viewModel.fetchStations(userLocation: locationManager.userLocation, forceRefresh: true) }
                         }
                         .font(.caption2.bold())
                         .foregroundStyle(Color.emerald)
@@ -185,13 +201,8 @@ struct StationsMapView: View {
         }
         .task {
             locationManager.requestPermission()
-            await viewModel.fetchStations(userLocation: locationManager.userLocation)
-        }
-        .onChange(of: locationManager.userLocation) { _, newLoc in
-            if let loc = newLoc {
-                Task {
-                    await viewModel.fetchStations(userLocation: loc)
-                }
+            if viewModel.allStations.isEmpty {
+                await viewModel.fetchStations(userLocation: locationManager.userLocation)
             }
         }
         .sheet(item: $selectedStationForDetail) { station in
@@ -211,9 +222,25 @@ struct StationsMapView: View {
                             showListSheet = false
                         }
                 }
+                .refreshable {
+                    await viewModel.fetchStations(userLocation: locationManager.userLocation, forceRefresh: true)
+                }
                 .navigationTitle("Daftar Stasiun SPKLU (\(viewModel.stations.count))")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            Task {
+                                await viewModel.fetchStations(userLocation: locationManager.userLocation, forceRefresh: true)
+                            }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(Color.emerald)
+                        }
+                        .disabled(viewModel.isLoading)
+                    }
+
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Tutup") { showListSheet = false }
                     }
