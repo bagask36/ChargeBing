@@ -22,11 +22,14 @@ struct StationsMapView: View {
                 UserAnnotation()
 
                 ForEach(viewModel.stations) { station in
-                    Annotation(station.name, coordinate: station.coordinate) {
+                    Annotation("", coordinate: station.coordinate) {
                         Button {
                             selectedStationForDetail = station
                         } label: {
-                            StationPinMarkerView(station: station)
+                            StationPinMarkerView(
+                                station: station,
+                                isSelected: selectedStationForDetail?.id == station.id
+                            )
                         }
                         .buttonStyle(.plain)
                     }
@@ -221,41 +224,133 @@ struct StationsMapView: View {
     }
 }
 
+// MARK: - Modern Teardrop Marker Pin Shape
+struct MarkerPinShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width
+        let h = rect.height
+        let r = w / 2
+        let bulbCenter = CGPoint(x: w / 2, y: r)
+        let tip = CGPoint(x: w / 2, y: h)
+
+        path.move(to: tip)
+        path.addQuadCurve(
+            to: CGPoint(x: 0, y: r),
+            control: CGPoint(x: 0, y: h * 0.72)
+        )
+        path.addArc(
+            center: bulbCenter,
+            radius: r,
+            startAngle: .degrees(180),
+            endAngle: .degrees(0),
+            clockwise: false
+        )
+        path.addQuadCurve(
+            to: tip,
+            control: CGPoint(x: w, y: h * 0.72)
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
 // MARK: - Station Marker Pin
 struct StationPinMarkerView: View {
     let station: Station
+    var isSelected: Bool = false
 
-    var pinColor: Color {
+    var gradientColors: [Color] {
         switch station.gbtStatus {
-        case .native: return Color.emerald
-        case .adapterOk: return Color.blue
-        case .untested: return Color.orange
-        case .incompatible: return Color.red
+        case .native:
+            return [Color(red: 16/255, green: 185/255, blue: 129/255), Color(red: 5/255, green: 150/255, blue: 105/255)]
+        case .adapterOk:
+            return [Color(red: 59/255, green: 130/255, blue: 246/255), Color(red: 29/255, green: 78/255, blue: 216/255)]
+        case .untested:
+            return [Color(red: 245/255, green: 158/255, blue: 11/255), Color(red: 217/255, green: 119/255, blue: 6/255)]
+        case .incompatible:
+            return [Color(red: 239/255, green: 68/255, blue: 68/255), Color(red: 185/255, green: 28/255, blue: 28/255)]
         }
     }
 
+    var primaryColor: Color {
+        gradientColors.first ?? Color.emerald
+    }
+
+    var maxKwText: String? {
+        if let maxKw = station.connectors?.map(\.powerKw).max(), maxKw > 0 {
+            return "\(Int(maxKw))kW"
+        }
+        return nil
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 2) {
+            // Main Teardrop Pin
             ZStack {
-                Circle()
-                    .fill(pinColor)
-                    .frame(width: 34, height: 34)
-                    .shadow(color: pinColor.opacity(0.4), radius: 6, y: 3)
+                MarkerPinShape()
+                    .fill(
+                        LinearGradient(
+                            colors: gradientColors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: isSelected ? 38 : 32, height: isSelected ? 46 : 40)
+                    .shadow(color: primaryColor.opacity(0.35), radius: isSelected ? 8 : 4, y: isSelected ? 4 : 2)
                     .overlay(
-                        Circle().stroke(Color.white, lineWidth: 2)
+                        MarkerPinShape()
+                            .stroke(Color.white, lineWidth: isSelected ? 2.5 : 2)
                     )
 
-                Image(systemName: "bolt.fill")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
+                // Bolt & Max Power inside bulb
+                VStack(spacing: 1) {
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: isSelected ? 14 : 12, weight: .bold))
+                        .foregroundStyle(.white)
+
+                    if let kw = maxKwText {
+                        Text(kw)
+                            .font(.system(size: 7.5, weight: .heavy))
+                            .foregroundStyle(.white.opacity(0.95))
+                    }
+                }
+                .offset(y: isSelected ? -4 : -3.5)
+
+                // Favorite Star Badge (Top-right corner)
+                if station.isFavorite {
+                    Circle()
+                        .fill(Color(red: 254/255, green: 240/255, blue: 138/255))
+                        .frame(width: 13, height: 13)
+                        .overlay(
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 7.5))
+                                .foregroundStyle(Color.orange)
+                        )
+                        .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                        .offset(x: isSelected ? 13 : 11, y: isSelected ? -15 : -13)
+                }
             }
 
-            Image(systemName: "triangle.fill")
-                .font(.system(size: 10))
-                .foregroundStyle(pinColor)
-                .rotationEffect(.degrees(180))
-                .offset(y: -3)
+            // Clean Frosted Label Pill
+            Text(station.name)
+                .font(.system(size: 9.5, weight: .semibold))
+                .foregroundStyle(Color.primary)
+                .lineLimit(1)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2.5)
+                .background(.ultraThinMaterial)
+                .background(Color(uiColor: .systemBackground).opacity(0.85))
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+                )
+                .shadow(color: Color.black.opacity(0.12), radius: 3, y: 1.5)
+                .frame(maxWidth: 110)
         }
+        .scaleEffect(isSelected ? 1.08 : 1.0)
+        .animation(.spring(response: 0.28, dampingFraction: 0.65), value: isSelected)
     }
 }
 
