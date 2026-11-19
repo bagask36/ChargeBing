@@ -48,11 +48,13 @@ struct User: Identifiable, Codable, Sendable {
     let id: Int
     let name: String
     let email: String
+    let avatarUrl: String?
     let evModelId: Int?
     let evModel: EvModel?
 
     enum CodingKeys: String, CodingKey {
         case id, name, email
+        case avatarUrl = "avatar_url"
         case evModelId = "ev_model_id"
         case evModel = "ev_model"
     }

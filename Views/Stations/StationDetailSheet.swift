@@ -149,12 +149,6 @@ struct StationDetailSheet: View {
                                     }
 
                                     VStack(alignment: .leading, spacing: 2) {
-                                        HStack(spacing: 6) {
-                                            Circle()
-                                                .fill(Color.emerald)
-                                                .frame(width: 4, height: 4)
-                                        }
-
                                         Text(app.name)
                                             .font(.subheadline.bold())
                                             .foregroundStyle(.primary)
