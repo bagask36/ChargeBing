@@ -292,6 +292,11 @@ struct ChargingSession: Identifiable, Decodable, Sendable {
     let cost: Double?
     let socStart: Int?
     let socEnd: Int?
+    let odometerKm: Int?
+    let distanceKm: Double?
+    let distanceKmInput: Double?
+    let previousSession: PreviousSessionInfo?
+    let efficiencyKmPerKwh: Double?
     let notes: String?
     let station: Station?
     let connector: Connector?
@@ -307,7 +312,25 @@ struct ChargingSession: Identifiable, Decodable, Sendable {
         case endedAt = "ended_at"
         case socStart = "soc_start"
         case socEnd = "soc_end"
+        case odometerKm = "odometer_km"
+        case distanceKm = "distance_km"
+        case distanceKmInput = "distance_km_input"
+        case previousSession = "previous_session"
+        case efficiencyKmPerKwh = "efficiency_km_per_kwh"
         case evModel = "ev_model"
+    }
+}
+
+struct PreviousSessionInfo: Decodable, Sendable {
+    let id: Int
+    let startedAt: String?
+    let kwh: Double
+    let odometerKm: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, kwh
+        case startedAt = "started_at"
+        case odometerKm = "odometer_km"
     }
 }
 

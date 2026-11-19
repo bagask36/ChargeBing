@@ -465,6 +465,26 @@ struct SessionCardView: View {
                     }
                 }
 
+                // Jarak & Efisiensi (jika tersedia)
+                if let dist = session.distanceKm {
+                    HStack(spacing: 8) {
+                        MetricCardPill(
+                            label: "Jarak Tempuh",
+                            value: String(format: "%.0f km", dist),
+                            icon: "road.lanes",
+                            tint: .purple
+                        )
+                        if let eff = session.efficiencyKmPerKwh, eff > 0 {
+                            MetricCardPill(
+                                label: "Efisiensi",
+                                value: String(format: "%.2f km/kWh", eff),
+                                icon: "leaf.fill",
+                                tint: Color.emerald
+                            )
+                        }
+                    }
+                }
+
                 // Battery SoC Progress Gauge (if available)
                 if let start = session.socStart, let end = session.socEnd {
                     SessionBatteryGauge(startSoC: start, endSoC: end)
@@ -861,6 +881,78 @@ struct SessionDetailSheet: View {
                                 Text("Akhir: \(end)% (+\(max(0, end - start))%)")
                                     .font(.caption.bold())
                                     .foregroundStyle(Color.emerald)
+                            }
+                        }
+                        .padding(18)
+                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                        .padding(.horizontal)
+                    }
+
+                    // Jarak Tempuh & Efisiensi Card
+                    if currentSession.distanceKm != nil || currentSession.odometerKm != nil {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Jarak Tempuh & Efisiensi")
+                                .font(.headline)
+
+                            if let eff = currentSession.efficiencyKmPerKwh, eff > 0 {
+                                HStack(alignment: .firstTextBaseline) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(String(format: "%.2f", eff))
+                                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                                            .foregroundStyle(Color.emerald)
+                                        Text("km/kWh")
+                                            .font(.caption.bold())
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text(String(format: "%.1f", 100 / eff))
+                                            .font(.title3.bold())
+                                            .foregroundStyle(.primary)
+                                        Text("kWh/100 km")
+                                            .font(.caption.bold())
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .padding(14)
+                                .background(Color.emerald.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                            }
+
+                            VStack(spacing: 12) {
+                                if let dist = currentSession.distanceKm {
+                                    DetailInfoRow(
+                                        title: "Jarak Sejak Charging Terakhir",
+                                        value: String(format: "%.1f km", dist),
+                                        icon: "road.lanes",
+                                        tint: Color.emerald
+                                    )
+                                }
+                                if let odo = currentSession.odometerKm {
+                                    DetailInfoRow(
+                                        title: "Odometer",
+                                        value: "\(odo) km",
+                                        icon: "gauge.open.with.lines.needle.33percent",
+                                        tint: .orange
+                                    )
+                                }
+                                if let prev = currentSession.previousSession {
+                                    DetailInfoRow(
+                                        title: "Energi Charging Terakhir",
+                                        value: Formatters.kwh(prev.kwh),
+                                        icon: "bolt.fill",
+                                        tint: .blue
+                                    )
+                                    if let prevDate = prev.startedAt {
+                                        DetailInfoRow(
+                                            title: "Waktu Charging Terakhir",
+                                            value: Formatters.dateTime(prevDate),
+                                            icon: "clock.arrow.circlepath",
+                                            tint: .secondary
+                                        )
+                                    }
+                                }
                             }
                         }
                         .padding(18)

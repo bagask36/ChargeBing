@@ -23,6 +23,8 @@ struct AddSessionSheet: View {
     @State private var socStartText: String = ""
     @State private var socEndText: String = ""
     @State private var notesText: String = ""
+    @State private var odometerText: String = ""
+    @State private var distanceText: String = ""
 
     @State private var isSubmitting = false
     @State private var errorMessage: String?
@@ -70,7 +72,44 @@ struct AddSessionSheet: View {
             _socStartText = State(initialValue: session.socStart != nil ? "\(session.socStart!)" : "")
             _socEndText = State(initialValue: session.socEnd != nil ? "\(session.socEnd!)" : "")
             _notesText = State(initialValue: session.notes ?? "")
+            _odometerText = State(initialValue: session.odometerKm.map { "\($0)" } ?? "")
+            _distanceText = State(initialValue: session.distanceKmInput.map { Self.formatNumber($0) } ?? "")
         }
+    }
+
+    private static func formatNumber(_ value: Double) -> String {
+        value.truncatingRemainder(dividingBy: 1) == 0 ? "\(Int(value))" : String(format: "%.1f", value)
+    }
+
+    private static func parseDouble(_ text: String) -> Double? {
+        Double(text.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces))
+    }
+
+    /// Sesi charging terakhir sebelum waktu mulai sesi ini
+    private var previousSession: ChargingSession? {
+        sessionsVM.sessions
+            .filter { $0.id != sessionToEdit?.id }
+            .compactMap { s -> (ChargingSession, Date)? in
+                guard let d = Formatters.parseDate(s.startedAt), d < startedAt else { return nil }
+                return (s, d)
+            }
+            .max { $0.1 < $1.1 }?
+            .0
+    }
+
+    /// Jarak dihitung otomatis dari selisih odometer jika input manual kosong
+    private var autoDistanceKm: Double? {
+        guard let odo = Int(odometerText), let prevOdo = previousSession?.odometerKm, odo >= prevOdo else { return nil }
+        return Double(odo - prevOdo)
+    }
+
+    private var effectiveDistanceKm: Double? {
+        Self.parseDouble(distanceText) ?? autoDistanceKm
+    }
+
+    private var efficiencyKmPerKwh: Double? {
+        guard let dist = effectiveDistanceKm, let prev = previousSession, prev.kwh > 0 else { return nil }
+        return dist / prev.kwh
     }
 
     private var availableStations: [Station] {
@@ -269,6 +308,77 @@ struct AddSessionSheet: View {
                     Label("Status Baterai (SoC)", systemImage: "battery.75percent")
                 }
 
+                // MARK: - Jarak Tempuh & Efisiensi Section
+                Section {
+                    HStack {
+                        Label("Odometer (km)", systemImage: "gauge.open.with.lines.needle.33percent")
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        TextField("cth: 12450", text: $odometerText)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .font(.body.bold())
+                    }
+
+                    HStack {
+                        Label("Jarak Tempuh (km)", systemImage: "road.lanes")
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        TextField(autoDistanceKm.map { "Otomatis: \(Self.formatNumber($0))" } ?? "cth: 230", text: $distanceText)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .font(.body.bold())
+                    }
+
+                    if let prev = previousSession {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .foregroundStyle(.secondary)
+                                Text("Charging terakhir: \(Formatters.dateTime(prev.startedAt))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            HStack(spacing: 8) {
+                                EfficiencyPill(title: "Energi Terakhir", value: Formatters.kwh(prev.kwh), tint: .blue)
+                                if let odo = prev.odometerKm {
+                                    EfficiencyPill(title: "Odometer Terakhir", value: "\(odo) km", tint: .orange)
+                                }
+                            }
+
+                            if let eff = efficiencyKmPerKwh, let dist = effectiveDistanceKm {
+                                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                    Image(systemName: "leaf.fill")
+                                        .foregroundStyle(Color.emerald)
+                                    Text(String(format: "%.2f km/kWh", eff))
+                                        .font(.title3.bold())
+                                        .foregroundStyle(Color.emerald)
+                                    Spacer()
+                                    Text(String(format: "%.1f kWh/100km", 100 / eff))
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.secondary)
+                                }
+                                Text("\(Self.formatNumber(dist)) km ÷ \(String(format: "%.2f", prev.kwh)) kWh (energi charging terakhir)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text("Isi odometer atau jarak tempuh untuk menghitung efisiensi km/kWh.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } header: {
+                    Label("Jarak Tempuh & Efisiensi", systemImage: "road.lanes")
+                } footer: {
+                    Text(previousSession == nil
+                         ? "Belum ada sesi charging sebelumnya. Isi odometer agar sesi berikutnya bisa dihitung otomatis."
+                         : "Jarak dihitung otomatis dari selisih odometer jika kolom jarak dikosongkan. Efisiensi = jarak ÷ kWh charging terakhir.")
+                        .font(.caption2)
+                }
+
                 // MARK: - Notes Section
                 Section {
                     TextField("Tulis catatan kondisi stasiun, antrean, atau kecepatan pengisian...", text: $notesText, axis: .vertical)
@@ -313,6 +423,7 @@ struct AddSessionSheet: View {
                 }
             }
             .task {
+                await sessionsVM.fetchSessions()
                 if preselectedStation == nil && sessionToEdit?.station == nil {
                     await stationsVM.fetchStations()
                     if selectedStationId == nil, let first = stationsVM.stations.first {
@@ -356,6 +467,8 @@ struct AddSessionSheet: View {
                     cost: cost,
                     socStart: socStart,
                     socEnd: socEnd,
+                    odometerKm: Int(odometerText),
+                    distanceKm: Self.parseDouble(distanceText),
                     notes: notesText.isEmpty ? nil : notesText
                 )
 
@@ -379,6 +492,8 @@ struct AddSessionSheet: View {
                     cost: cost,
                     socStart: socStart,
                     socEnd: socEnd,
+                    odometerKm: Int(odometerText),
+                    distanceKm: Self.parseDouble(distanceText),
                     notes: notesText.isEmpty ? nil : notesText
                 )
 
@@ -407,5 +522,27 @@ struct EditSessionSheet: View {
             onSessionSaved: {},
             onSessionUpdated: onSessionUpdated
         )
+    }
+}
+
+// MARK: - Efficiency Pill
+struct EfficiencyPill: View {
+    let title: String
+    let value: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.bold())
+                .foregroundStyle(tint)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(tint.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }

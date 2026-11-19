@@ -55,6 +55,8 @@ final class SessionsViewModel {
         cost: Double?,
         socStart: Int?,
         socEnd: Int?,
+        odometerKm: Int? = nil,
+        distanceKm: Double? = nil,
         notes: String?
     ) async -> Bool {
         struct CreateSessionPayload: Encodable {
@@ -68,7 +70,32 @@ final class SessionsViewModel {
             let cost: Double?
             let soc_start: Int?
             let soc_end: Int?
+            let odometer_km: Int?
+            let distance_km: Double?
             let notes: String?
+
+            enum CodingKeys: String, CodingKey {
+                case station_id, connector_id, ev_model_id, charging_mode, started_at, ended_at
+                case kwh, cost, soc_start, soc_end, odometer_km, distance_km, notes
+            }
+
+            // Kirim null secara eksplisit agar field yang dikosongkan ikut terhapus di server
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(station_id, forKey: .station_id)
+                try c.encode(connector_id, forKey: .connector_id)
+                try c.encode(ev_model_id, forKey: .ev_model_id)
+                try c.encode(charging_mode, forKey: .charging_mode)
+                try c.encode(started_at, forKey: .started_at)
+                try c.encode(ended_at, forKey: .ended_at)
+                try c.encode(kwh, forKey: .kwh)
+                try c.encode(cost, forKey: .cost)
+                try c.encode(soc_start, forKey: .soc_start)
+                try c.encode(soc_end, forKey: .soc_end)
+                try c.encode(odometer_km, forKey: .odometer_km)
+                try c.encode(distance_km, forKey: .distance_km)
+                try c.encode(notes, forKey: .notes)
+            }
         }
 
         do {
@@ -83,6 +110,8 @@ final class SessionsViewModel {
                 cost: cost,
                 soc_start: socStart,
                 soc_end: socEnd,
+                odometer_km: odometerKm,
+                distance_km: distanceKm,
                 notes: notes
             )
 
@@ -113,6 +142,8 @@ final class SessionsViewModel {
         cost: Double?,
         socStart: Int?,
         socEnd: Int?,
+        odometerKm: Int? = nil,
+        distanceKm: Double? = nil,
         notes: String?
     ) async -> ChargingSession? {
         struct UpdateSessionPayload: Encodable {
@@ -126,7 +157,32 @@ final class SessionsViewModel {
             let cost: Double?
             let soc_start: Int?
             let soc_end: Int?
+            let odometer_km: Int?
+            let distance_km: Double?
             let notes: String?
+
+            enum CodingKeys: String, CodingKey {
+                case station_id, connector_id, ev_model_id, charging_mode, started_at, ended_at
+                case kwh, cost, soc_start, soc_end, odometer_km, distance_km, notes
+            }
+
+            // Kirim null secara eksplisit agar field yang dikosongkan ikut terhapus di server
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(station_id, forKey: .station_id)
+                try c.encode(connector_id, forKey: .connector_id)
+                try c.encode(ev_model_id, forKey: .ev_model_id)
+                try c.encode(charging_mode, forKey: .charging_mode)
+                try c.encode(started_at, forKey: .started_at)
+                try c.encode(ended_at, forKey: .ended_at)
+                try c.encode(kwh, forKey: .kwh)
+                try c.encode(cost, forKey: .cost)
+                try c.encode(soc_start, forKey: .soc_start)
+                try c.encode(soc_end, forKey: .soc_end)
+                try c.encode(odometer_km, forKey: .odometer_km)
+                try c.encode(distance_km, forKey: .distance_km)
+                try c.encode(notes, forKey: .notes)
+            }
         }
 
         do {
@@ -141,6 +197,8 @@ final class SessionsViewModel {
                 cost: cost,
                 soc_start: socStart,
                 soc_end: socEnd,
+                odometer_km: odometerKm,
+                distance_km: distanceKm,
                 notes: notes
             )
 
