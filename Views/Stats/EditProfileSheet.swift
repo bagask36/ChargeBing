@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct EditProfileSheet: View {
     @Environment(AuthViewModel.self) private var authVM
@@ -10,53 +11,95 @@ struct EditProfileSheet: View {
     @State private var password: String = ""
     @State private var selectedEvModelId: Int? = nil
 
+    // Foto Profil Picker State
+    @State private var selectedPhotoItem: PhotosPickerItem? = nil
+    @State private var selectedImage: UIImage? = nil
+    @State private var avatarBase64: String? = nil
+    @State private var hasChangedPhoto: Bool = false
+    @State private var isRemovingPhoto: Bool = false
+
     @State private var isSubmitting: Bool = false
     @State private var errorMessage: String? = nil
     @State private var showSuccessAlert: Bool = false
 
+    private var activeAvatarUrl: String? {
+        if isRemovingPhoto { return nil }
+        return avatarBase64 ?? authVM.currentUser?.avatarUrl
+    }
+
+    private var hasActiveAvatar: Bool {
+        if isRemovingPhoto { return false }
+        return selectedImage != nil || (authVM.currentUser?.avatarUrl != nil && !authVM.currentUser!.avatarUrl!.isEmpty)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                // MARK: - Avatar & Preview Header
+                // MARK: - Avatar & Foto Profil Section
                 Section {
-                    HStack(spacing: 16) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.emerald.opacity(0.15))
-                                .frame(width: 64, height: 64)
+                    VStack(spacing: 14) {
+                        ZStack(alignment: .bottomTrailing) {
+                            UserAvatarView(
+                                avatarUrl: activeAvatarUrl,
+                                uiImage: isRemovingPhoto ? nil : selectedImage,
+                                name: name,
+                                size: 92,
+                                showBorder: true
+                            )
 
-                            Text(name.trimmingCharacters(in: .whitespaces).prefix(1).uppercased().isEmpty ? "U" : name.trimmingCharacters(in: .whitespaces).prefix(1).uppercased())
-                                .font(.title.bold())
-                                .foregroundStyle(Color.emerald)
-                        }
+                            // Quick Camera Button on Avatar
+                            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.emerald)
+                                        .frame(width: 32, height: 32)
+                                        .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(name.isEmpty ? "Nama Pengguna" : name)
-                                .font(.headline)
-                                .lineLimit(1)
-
-                            Text(email.isEmpty ? "email@chargebing.local" : email)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-
-                            if let selectedId = selectedEvModelId,
-                               let model = evModelsVM.models.first(where: { $0.id == selectedId }) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "car.side.fill")
-                                        .font(.system(size: 9))
-                                    Text(model.fullName)
-                                        .font(.caption2.bold())
+                                    Image(systemName: "camera.fill")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(.white)
                                 }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 2)
-                                .background(Color.emerald.opacity(0.12))
+                            }
+                            .buttonStyle(.plain)
+                            .offset(x: 4, y: 4)
+                        }
+                        .padding(.top, 4)
+
+                        VStack(spacing: 6) {
+                            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "photo.badge.plus")
+                                    Text(hasActiveAvatar ? "Ganti Foto Profil" : "Pilih Foto Profil")
+                                }
+                                .font(.caption.bold())
                                 .foregroundStyle(Color.emerald)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 6)
+                                .background(Color.emerald.opacity(0.12))
                                 .clipShape(Capsule())
+                            }
+
+                            if hasActiveAvatar {
+                                Button(role: .destructive) {
+                                    withAnimation {
+                                        isRemovingPhoto = true
+                                        selectedImage = nil
+                                        avatarBase64 = ""
+                                        hasChangedPhoto = true
+                                        selectedPhotoItem = nil
+                                    }
+                                } label: {
+                                    Text("Hapus Foto")
+                                        .font(.caption2)
+                                        .foregroundStyle(.red)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
-                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .listRowBackground(Color.clear)
                 }
 
                 // MARK: - Informasi Akun
@@ -81,17 +124,6 @@ struct EditProfileSheet: View {
                     }
                 }
 
-                // MARK: - Ganti Password (Opsional)
-                Section(header: Text("Keamanan & Password"), footer: Text("Kosongkan kolom password jika Anda tidak ingin mengubah password akun.")) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "lock.fill")
-                            .foregroundStyle(Color.emerald)
-                            .frame(width: 22)
-                        SecureField("Password Baru (Opsional, min. 8 karakter)", text: $password)
-                            .textContentType(.newPassword)
-                    }
-                }
-
                 // MARK: - Mobil Listrik Aktif (EV Model)
                 Section("Mobil Listrik Utama") {
                     if evModelsVM.isLoading && evModelsVM.models.isEmpty {
@@ -111,6 +143,43 @@ struct EditProfileSheet: View {
                             }
                         }
                         .pickerStyle(.navigationLink)
+                    }
+
+                    if let selectedId = selectedEvModelId,
+                       let car = evModelsVM.models.first(where: { $0.id == selectedId }) {
+                        HStack(spacing: 12) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "battery.100percent")
+                                    .font(.caption2)
+                                    .foregroundStyle(Color.emerald)
+                                Text("\(String(format: "%.1f", car.batteryCapacityKwh)) kWh")
+                                    .font(.caption.bold())
+                            }
+                            Spacer()
+                            HStack(spacing: 4) {
+                                Image(systemName: "road.lanes")
+                                    .font(.caption2)
+                                    .foregroundStyle(.blue)
+                                Text("\(car.rangeKm) km (Jarak Tempuh)")
+                                    .font(.caption.bold())
+                            }
+                        }
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 2)
+                    }
+                }
+
+                // MARK: - Ganti Password (Opsional)
+                Section(
+                    header: Text("Keamanan & Password"),
+                    footer: Text("Kosongkan kolom password jika Anda tidak ingin mengubah password akun.")
+                ) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "lock.fill")
+                            .foregroundStyle(Color.emerald)
+                            .frame(width: 22)
+                        SecureField("Password Baru (Opsional, min. 8 karakter)", text: $password)
+                            .textContentType(.newPassword)
                     }
                 }
 
@@ -166,12 +235,30 @@ struct EditProfileSheet: View {
             .task {
                 await evModelsVM.fetchModels()
             }
+            .onChange(of: selectedPhotoItem) { _, newItem in
+                guard let item = newItem else { return }
+                Task {
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       let image = UIImage(data: data) {
+                        let resized = image.resized(toMaxDimension: 512)
+                        if let jpegData = resized.jpegData(compressionQuality: 0.75) {
+                            let base64String = "data:image/jpeg;base64," + jpegData.base64EncodedString()
+                            await MainActor.run {
+                                self.selectedImage = resized
+                                self.avatarBase64 = base64String
+                                self.hasChangedPhoto = true
+                                self.isRemovingPhoto = false
+                            }
+                        }
+                    }
+                }
+            }
             .alert("Profil Diperbarui", isPresented: $showSuccessAlert) {
                 Button("OK") {
                     dismiss()
                 }
             } message: {
-                Text("Data profil akun Anda berhasil disimpan.")
+                Text("Data profil akun dan foto Anda berhasil disimpan.")
             }
         }
     }
@@ -189,11 +276,19 @@ struct EditProfileSheet: View {
         isSubmitting = true
 
         Task {
+            let avatarToSend: String?
+            if hasChangedPhoto {
+                avatarToSend = isRemovingPhoto ? "" : avatarBase64
+            } else {
+                avatarToSend = nil
+            }
+
             let result = await authVM.updateProfile(
                 name: name,
                 email: email,
                 password: password.isEmpty ? nil : password,
-                evModelId: selectedEvModelId
+                evModelId: selectedEvModelId,
+                avatar: avatarToSend
             )
 
             isSubmitting = false
@@ -206,4 +301,3 @@ struct EditProfileSheet: View {
         }
     }
 }
-

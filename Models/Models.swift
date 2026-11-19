@@ -353,6 +353,9 @@ struct TimeStats: Decodable, Sendable {
     let totalSessions: Int
     let totalKwh: Double
     let totalCost: Double
+    let totalDistanceKm: Double?
+    let avgKmPerKwh: Double?
+    let avgKwhPer100Km: Double?
     let ac: ModeStats
     let dc: ModeStats
 
@@ -360,6 +363,9 @@ struct TimeStats: Decodable, Sendable {
         case totalSessions = "total_sessions"
         case totalKwh = "total_kwh"
         case totalCost = "total_cost"
+        case totalDistanceKm = "total_distance_km"
+        case avgKmPerKwh = "avg_km_per_kwh"
+        case avgKwhPer100Km = "avg_kwh_per_100km"
         case ac, dc
     }
 }
@@ -369,6 +375,9 @@ struct MonthStats: Decodable, Sendable {
     let totalSessions: Int
     let totalKwh: Double
     let totalCost: Double
+    let totalDistanceKm: Double?
+    let avgKmPerKwh: Double?
+    let avgKwhPer100Km: Double?
     let ac: ModeStats
     let dc: ModeStats
 
@@ -377,6 +386,9 @@ struct MonthStats: Decodable, Sendable {
         case totalSessions = "total_sessions"
         case totalKwh = "total_kwh"
         case totalCost = "total_cost"
+        case totalDistanceKm = "total_distance_km"
+        case avgKmPerKwh = "avg_km_per_kwh"
+        case avgKwhPer100Km = "avg_kwh_per_100km"
         case ac, dc
     }
 }

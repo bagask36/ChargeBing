@@ -108,86 +108,185 @@ private struct UserProfileHeaderCard: View {
     let onLogoutTapped: () -> Void
 
     var body: some View {
-        HStack(spacing: 14) {
-            Button(action: onEditTapped) {
-                HStack(spacing: 14) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.emerald.opacity(0.15))
-                            .frame(width: 54, height: 54)
+        VStack(spacing: 16) {
+            // Top Row: Avatar, Identity & Actions
+            HStack(alignment: .top, spacing: 14) {
+                // Circular Avatar with edit badge
+                Button(action: onEditTapped) {
+                    ZStack(alignment: .bottomTrailing) {
+                        UserAvatarView(
+                            avatarUrl: user.avatarUrl,
+                            name: user.name,
+                            size: 68,
+                            showBorder: true
+                        )
 
-                        Text(user.name.prefix(1).uppercased())
-                            .font(.title2.bold())
+                        // Subtle Edit Pen Badge
+                        Circle()
+                            .fill(Color.emerald)
+                            .frame(width: 22, height: 22)
+                            .overlay(
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
+                            )
+                            .shadow(color: .black.opacity(0.15), radius: 2)
+                            .offset(x: 2, y: 2)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                // User Info
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(user.name)
+                            .font(.title3.bold())
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.caption)
                             .foregroundStyle(Color.emerald)
                     }
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(spacing: 6) {
-                            Text(user.name)
-                                .font(.headline)
-                                .foregroundStyle(.primary)
+                    Text(user.email)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
 
-                            Image(systemName: "pencil.circle.fill")
-                                .font(.caption)
+                    HStack(spacing: 6) {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(Color.emerald)
+                                .frame(width: 6, height: 6)
+                            Text("Pengemudi EV Aktif")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(Color.emerald)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.emerald.opacity(0.12))
+                        .clipShape(Capsule())
+                    }
+                    .padding(.top, 2)
+                }
+
+                Spacer()
+
+                // Logout button
+                Button(action: onLogoutTapped) {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.caption.bold())
+                        .foregroundStyle(.red)
+                        .frame(width: 34, height: 34)
+                        .background(Color.red.opacity(0.08))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Middle Section: Vehicle Pill / Card
+            if let car = user.evModel {
+                Button(action: onEditTapped) {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.emerald.opacity(0.15))
+                                .frame(width: 40, height: 40)
+                            Image(systemName: "car.side.fill")
+                                .font(.system(size: 16))
                                 .foregroundStyle(Color.emerald)
                         }
 
-                        Text(user.email)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(car.fullName)
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.primary)
+
+                            HStack(spacing: 8) {
+                                Label("\(String(format: "%.1f", car.batteryCapacityKwh)) kWh", systemImage: "battery.100percent")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(Color.emerald)
+
+                                Text("•")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+
+                                Label("\(car.rangeKm) km Range", systemImage: "road.lanes")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color(uiColor: .systemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button(action: onEditTapped) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "car.side")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.emerald)
+
+                        Text("Pilih Mobil Listrik Anda...")
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
-                        if let car = user.evModel {
-                            HStack(spacing: 4) {
-                                Image(systemName: "car.side.fill")
-                                    .font(.system(size: 10))
-                                Text(car.fullName)
-                                    .font(.caption2.bold())
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 2)
-                            .background(Color.emerald.opacity(0.12))
+                        Spacer()
+
+                        Text("Atur")
+                            .font(.caption.bold())
                             .foregroundStyle(Color.emerald)
-                            .clipShape(Capsule())
-                            .padding(.top, 2)
-                        }
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color(uiColor: .systemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
+                .buttonStyle(.plain)
+            }
+
+            // Bottom Action Bar: Edit Profile Button
+            Button(action: onEditTapped) {
+                HStack(spacing: 6) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.caption.bold())
+                    Text("Kelola Profil & Ganti Foto")
+                        .font(.caption.bold())
+                }
+                .foregroundStyle(Color.emerald)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 9)
+                .background(Color.emerald.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
-
-            Spacer()
-
-            HStack(spacing: 8) {
-                Button(action: onEditTapped) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(Color.emerald)
-                        .padding(10)
-                        .background(Color.emerald.opacity(0.12))
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-
-                Button(action: onLogoutTapped) {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .font(.subheadline)
-                        .foregroundStyle(.red)
-                        .padding(10)
-                        .background(Color.red.opacity(0.1))
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-            }
         }
-        .padding(16)
+        .padding(18)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
-                .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
+                .shadow(color: Color.black.opacity(0.05), radius: 10, y: 4)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.emerald.opacity(0.3), Color.clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.2
+                )
         )
     }
 }

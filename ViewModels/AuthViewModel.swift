@@ -122,7 +122,8 @@ final class AuthViewModel {
         name: String,
         email: String,
         password: String? = nil,
-        evModelId: Int? = nil
+        evModelId: Int? = nil,
+        avatar: String? = nil
     ) async -> (success: Bool, message: String?) {
         isLoading = true
         errorMessage = nil
@@ -132,6 +133,7 @@ final class AuthViewModel {
             let email: String
             let password: String?
             let ev_model_id: Int?
+            let avatar: String?
         }
 
         do {
@@ -142,7 +144,8 @@ final class AuthViewModel {
                 name: name.trimmingCharacters(in: .whitespacesAndNewlines),
                 email: email.trimmingCharacters(in: .whitespacesAndNewlines),
                 password: pwdToSend,
-                ev_model_id: evModelId
+                ev_model_id: evModelId,
+                avatar: avatar
             )
 
             let response: UserProfileResponse = try await APIClient.shared.request(
