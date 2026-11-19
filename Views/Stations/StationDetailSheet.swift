@@ -150,18 +150,9 @@ struct StationDetailSheet: View {
 
                                     VStack(alignment: .leading, spacing: 2) {
                                         HStack(spacing: 6) {
-                                            Text("Aplikasi Pengisian")
-                                                .font(.caption2.bold())
-                                                .foregroundStyle(.secondary)
-                                                .textCase(.uppercase)
-
                                             Circle()
                                                 .fill(Color.emerald)
                                                 .frame(width: 4, height: 4)
-
-                                            Text("Scan & Bayar")
-                                                .font(.caption2)
-                                                .foregroundStyle(Color.emerald)
                                         }
 
                                         Text(app.name)
@@ -271,16 +262,49 @@ struct StationDetailSheet: View {
     }
 
     private func openChargingApp(_ app: ChargingApp) {
-        if let schemeStr = app.schemeUrl,
-           let schemeUrl = URL(string: schemeStr),
-           UIApplication.shared.canOpenURL(schemeUrl) {
-            UIApplication.shared.open(schemeUrl)
-        } else if let storeStr = app.appStoreUrl,
-                  let storeUrl = URL(string: storeStr) {
+        // Kumpulkan skema kandidat yang mungkin didaftarkan oleh aplikasi
+        var candidateSchemes: [String] = []
+        if let primary = app.schemeUrl, !primary.isEmpty {
+            candidateSchemes.append(primary)
+        }
+
+        let appNameLower = app.name.lowercased()
+        if appNameLower.contains("e charge") || appNameLower.contains("echarge") {
+            for s in ["echarge://", "echargeglobal://", "echargeinternational://", "com.echargeglobal://"] {
+                if !candidateSchemes.contains(s) { candidateSchemes.append(s) }
+            }
+        } else if appNameLower.contains("terra") {
+            for s in ["terracharge://", "terra-charge://", "terrachargeid://", "terrachargehyperion://", "com.terracharge.hyperion://", "hyperion://"] {
+                if !candidateSchemes.contains(s) { candidateSchemes.append(s) }
+            }
+        } else if appNameLower.contains("pln") {
+            for s in ["plnmobile://", "pln://"] {
+                if !candidateSchemes.contains(s) { candidateSchemes.append(s) }
+            }
+        } else if appNameLower.contains("voltron") {
+            for s in ["voltron://"] {
+                if !candidateSchemes.contains(s) { candidateSchemes.append(s) }
+            }
+        }
+
+        // Cek apakah ada skema yang berhasil terdeteksi di perangkat pengguna
+        for scheme in candidateSchemes {
+            if let schemeUrl = URL(string: scheme),
+               UIApplication.shared.canOpenURL(schemeUrl) {
+                print("[ChargingApp] Berhasil menemukan skema: \(scheme), membuka aplikasi...")
+                UIApplication.shared.open(schemeUrl)
+                return
+            }
+        }
+
+        // Fallback: Jika aplikasi tidak terpasang di perangkat / simulator, buka App Store
+        if let storeStr = app.appStoreUrl,
+           let storeUrl = URL(string: storeStr) {
+            print("[ChargingApp] Aplikasi belum terpasang atau skema tidak cocok, membuka App Store: \(storeStr)")
             UIApplication.shared.open(storeUrl)
-        } else if let schemeStr = app.schemeUrl,
-                  let schemeUrl = URL(string: schemeStr) {
-            UIApplication.shared.open(schemeUrl)
+        } else if let firstScheme = candidateSchemes.first,
+                  let fallbackUrl = URL(string: firstScheme) {
+            UIApplication.shared.open(fallbackUrl)
         }
     }
 }

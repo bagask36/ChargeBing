@@ -27,9 +27,15 @@
         <string>plnmobile</string>
         <string>voltron</string>
         <string>echarge</string>
+        <string>echargeglobal</string>
         <string>echargeinternational</string>
+        <string>com.echargeglobal</string>
         <string>terracharge</string>
         <string>terra-charge</string>
+        <string>terrachargeid</string>
+        <string>terrachargehyperion</string>
+        <string>hyperion</string>
+        <string>com.terracharge.hyperion</string>
         <string>comgooglemaps</string>
     </array>
     <key>NSLocationWhenInUseUsageDescription</key>

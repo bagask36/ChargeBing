@@ -133,8 +133,8 @@ struct ChargingAppMaster {
         id: 3,
         name: "E Charge International",
         schemeUrl: "echarge://",
-        appStoreUrl: "https://apps.apple.com/id/app/e-charge-international/id1666838321",
-        playStoreUrl: "https://play.google.com/store/apps/details?id=com.echarge.international",
+        appStoreUrl: "https://apps.apple.com/id/app/e-charge-international/id6447818817",
+        playStoreUrl: "https://play.google.com/store/apps/details?id=cn.echargeglobal",
         iconUrl: nil
     )
 
@@ -142,8 +142,8 @@ struct ChargingAppMaster {
         id: 4,
         name: "Terra Charge",
         schemeUrl: "terracharge://",
-        appStoreUrl: "https://apps.apple.com/id/app/terra-charge/id6444062492",
-        playStoreUrl: "https://play.google.com/store/apps/details?id=jp.co.terramotors.terracharge",
+        appStoreUrl: "https://apps.apple.com/id/app/terra-charge/id6462874422",
+        playStoreUrl: "https://play.google.com/store/apps/details?id=com.terracharge.hyperion",
         iconUrl: nil
     )
 
